@@ -1,29 +1,38 @@
-// app/api/sessionLogin/route.ts  (Node runtime)
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { auth } from "@/lib/firebase/firebaseAdmin";
 
 export async function POST(req) {
-  const { idToken } = await req.json();
-  if (!idToken) return NextResponse.json({ error: "Missing idToken" }, { status: 400 });
-
-  // expiresIn must be <= 14 days recommended by Firebase
-  const expiresIn = Number(process.env.SESSION_COOKIE_MAX_AGE) || 14 * 24 * 60 * 60 * 1000;
-
   try {
-    const sessionCookie = await auth.createSessionCookie(idToken, { expiresIn });
+    const { idToken } = await req.json();
+    
+    if (!idToken) {
+      return NextResponse.json({ error: "No ID token provided" }, { status: 400 });
+    }
 
-    const res = NextResponse.json({ status: "success" });
-    // set secure, httpOnly cookie
-    res.cookies.set(process.env.SESSION_COOKIE_NAME || "session", sessionCookie, {
+    // Verify the ID token first
+    const decodedToken = await auth.verifyIdToken(idToken);
+    
+    // Create session cookie (5 days expiry)
+    const expiresIn = 60 * 60 * 24 * 5 * 1000; // 5 days in milliseconds
+    const sessionCookie = await auth.createSessionCookie(idToken, { expiresIn });
+    
+    const response = NextResponse.json({ 
+      success: true, 
+      uid: decodedToken.uid 
+    });
+    
+    // Set secure cookie (always secure in Firebase App Hosting)
+    response.cookies.set(process.env.SESSION_COOKIE_NAME || "session", sessionCookie, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      maxAge: Math.floor(expiresIn / 1000),
+      secure: true, // Always HTTPS in Firebase App Hosting
       sameSite: "lax",
+      maxAge: expiresIn / 1000,
       path: "/",
     });
-    return res;
-  } catch (err) {
-    console.error("sessionLogin error", err);
-    return NextResponse.json({ error: "Failed to create session cookie" }, { status: 500 });
+    
+    return response;
+  } catch (error) {
+    console.error("Session login error:", error);
+    return NextResponse.json({ error: "Authentication failed" }, { status: 401 });
   }
 }

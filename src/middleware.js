@@ -1,81 +1,55 @@
-// middleware.ts
 import { NextResponse } from "next/server";
-import { jwtVerify, createRemoteJWKSet } from "jose";
-
-const JWKS = createRemoteJWKSet(
-  new URL("https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com")
-);
-
-const projectId = process.env.FIREBASE_PROJECT_ID;
 
 export async function middleware(req) {
   const cookieName = process.env.SESSION_COOKIE_NAME || "session";
-  const cookie = req.cookies.get(cookieName)?.value;
-  const token = req.cookies.get(cookieName)?.value;
-
-
+  const sessionCookie = req.cookies.get(cookieName)?.value;
+  
   const publicPaths = ["/login", "/api", "/_next", "/static", "/favicon.ico"];
   const pathname = req.nextUrl.pathname;
-
-  // allow public files
-  if (publicPaths.some(p => pathname.startsWith(p))) return NextResponse.next();
-
-  if (!cookie) {
-    console.log("no session cookie");
-    // not authenticated -> redirect to login
+  
+  // Allow public files
+  if (publicPaths.some(p => pathname.startsWith(p))) {
+    return NextResponse.next();
+  }
+  
+  if (!sessionCookie) {
     const loginUrl = new URL("/login", req.url);
     loginUrl.searchParams.set("from", pathname);
     return NextResponse.redirect(loginUrl);
   }
-
-  // Optionally: forward cookie to origin for server verification,
-  // or if you want to verify at edge, implement JWKS verification here.
-  /* try {
-
-    const { payload } = await jwtVerify(token, JWKS, {
-      issuer: `https://securetoken.google.com/${projectId}`,
-      audience: projectId,
+  
+  // Quick verification via internal API
+  try {
+    const verifyRes = await fetch(new URL("/api/auth/verify", req.url), {
+      headers: { cookie: req.headers.get("cookie") || "" },
     });
-    console.log("payload verified");
-    // ✅ token is cryptographically valid
+    
+    if (!verifyRes.ok) throw new Error("Verification failed");
+    
+    const { user } = await verifyRes.json();
+    
     const res = NextResponse.next();
-    res.headers.set("x-user-uid", payload.user_id );
+    res.headers.set("x-user-uid", user.uid);
+    res.headers.set("x-user-email", user.email || "");
+    
     return res;
-  } catch (err) {
-    console.log("token verification failed");
-    console.error(err);
-    // ❌ invalid / expired token
-    return NextResponse.redirect(new URL("/login", req.url));
-  } */
-  return NextResponse.next();
+  } catch (error) {
+    // Clear invalid cookie and redirect
+    const loginUrl = new URL("/login", req.url);
+    loginUrl.searchParams.set("from", pathname);
+    const response = NextResponse.redirect(loginUrl);
+    response.cookies.set(cookieName, "", {
+      httpOnly: true,
+      secure: true, // Always true in Firebase App Hosting
+      sameSite: "lax",
+      maxAge: 0,
+      path: "/",
+    });
+    
+    return response;
+  }
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
-};
-
-
-/* 
-export async function middleware(req) {
-  const cookieName = process.env.SESSION_COOKIE_NAME || "session";
-  const token = req.cookies.get(cookieName)?.value;
-
-  if (!token) {
-    return NextResponse.redirect(new URL("/login", req.url));
-  }
-
-  try {
-    const { payload } = await jwtVerify(token, JWKS, {
-      issuer: `https://securetoken.google.com/${projectId}`,
-      audience: projectId,
-    });
-
-    // ✅ token is cryptographically valid
-    const res = NextResponse.next();
-    res.headers.set("x-user-uid", payload.user_id);
-    return res;
-  } catch {
-    // ❌ invalid / expired token
-    return NextResponse.redirect(new URL("/login", req.url));
-  }
-} */
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+}

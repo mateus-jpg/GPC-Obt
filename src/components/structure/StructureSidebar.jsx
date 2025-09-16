@@ -136,7 +136,7 @@ const data = {
   ],
 }
 
-export function PortalSideBar({
+export function StructureSidebar({
   ...props
 }) {
   const { user, loading } = useAuth();

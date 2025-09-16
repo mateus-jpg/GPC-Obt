@@ -142,7 +142,7 @@ export function PortalSideBar({
   const { user, loading } = useAuth();
 
 
-  
+
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
@@ -160,7 +160,7 @@ export function PortalSideBar({
       <SidebarContent>
         <NavMain items={data.navMain} />
         <NavDocuments items={data.documents} />
-      {/*   <NavSecondary items={data.navSecondary} className="mt-auto" /> */}
+        {/*   <NavSecondary items={data.navSecondary} className="mt-auto" /> */}
       </SidebarContent>
       <SidebarFooter>
         {user ? <NavUser user={user} /> : <div className="p-4">Loading...</div>}
