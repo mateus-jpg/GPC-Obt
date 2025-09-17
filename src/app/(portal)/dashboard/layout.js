@@ -1,5 +1,6 @@
 
-import { AppSidebar, PortalSideBar } from "@/components/app-sidebar"
+import { AppSidebar } from "@/components/app-sidebar"
+import { PortalSideBar } from "@/components/portal/PortalSidebar";
 import { SiteHeader } from "@/components/site-header"
 import {
   SidebarInset,

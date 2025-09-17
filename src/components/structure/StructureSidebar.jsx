@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/sidebar"
 
 import { useAuth } from "@/context/AuthContext"
-import Logo from "./Logo"
+import Logo from "../Logo"
 
 const data = {
 
@@ -136,7 +136,7 @@ const data = {
   ],
 }
 
-export function StructureSidebar({
+export function StructureSidebar({structureId,
   ...props
 }) {
   const { user, loading } = useAuth();
@@ -149,7 +149,7 @@ export function StructureSidebar({
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild className="data-[slot=sidebar-menu-button]:!p-1.5">
-              <a href="#">
+              <a href="/dashboard">
                 <Logo className="!size-8" size={89} />
                 <span className="text-base font-semibold">GPC - OBT</span>
               </a>
@@ -163,7 +163,7 @@ export function StructureSidebar({
       {/*   <NavSecondary items={data.navSecondary} className="mt-auto" /> */}
       </SidebarContent>
       <SidebarFooter>
-        {user ? <NavUser user={user} /> : <div className="p-4">Loading...</div>}
+        <NavUser user={user} loading={loading} />
       </SidebarFooter>
     </Sidebar>
   );

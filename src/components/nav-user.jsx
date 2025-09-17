@@ -28,11 +28,26 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
+import { Skeleton } from "@/components/ui/skeleton"
+function SkeletonUser() {
+  return (
+    <div className="flex pb-2 pl-2 items-center space-x-4">
+      <Skeleton className="h-7 w-7 rounded-lg bg-gray-700" />
+      <div className="space-y-2">
+        <Skeleton className="h-2 w-[150px] bg-gray-700" />
+        <Skeleton className="h-2 w-[100px] bg-gray-600" />
+      </div>
+    </div>
+  )
+}
 
 export function NavUser({
-  user
+  user, loading
 }) {
   const { isMobile } = useSidebar()
+  if (loading) {
+    return <SkeletonUser />
+  }
 
   return (
     <SidebarMenu>
@@ -42,16 +57,20 @@ export function NavUser({
             <SidebarMenuButton
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
-              <Avatar className="h-8 w-8 rounded-lg grayscale">
-                <AvatarImage src={user.imgUrl} alt={user.displayName} />
-                <AvatarFallback className="rounded-lg">{user.displayName.charAt(0)}</AvatarFallback>
-              </Avatar>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{user.displayName}</span>
-                <span className="text-muted-foreground truncate text-xs">
-                  {user.email}
-                </span>
-              </div>
+              {loading ? <SkeletonUser /> : (
+                <>
+                  <Avatar className="h-8 w-8 rounded-lg grayscale">
+                    <AvatarImage src={user.imgUrl} alt={user.displayName} />
+                    <AvatarFallback className="rounded-lg">{user.displayName.charAt(0)}</AvatarFallback>
+                  </Avatar>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-medium">{user.displayName}</span>
+                    <span className="text-muted-foreground truncate text-xs">
+                      {user.email}
+                    </span>
+                  </div>
+                </>
+              )}
               <IconDotsVertical className="ml-auto size-4" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
@@ -75,7 +94,7 @@ export function NavUser({
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuGroup>
+            {/*  <DropdownMenuGroup>
               <DropdownMenuItem>
                 <IconUserCircle />
                 Account
@@ -89,8 +108,8 @@ export function NavUser({
                 Notifications
               </DropdownMenuItem>
             </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuSeparator /> */}
+            <DropdownMenuItem onClick={() => { console.log("logout") }}>
               <IconLogout />
               Log out
             </DropdownMenuItem>

@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/sidebar"
 
 import { useAuth } from "@/context/AuthContext"
-import Logo from "./Logo"
+import Logo from "../Logo"
 
 const data = {
 
@@ -163,7 +163,7 @@ export function PortalSideBar({
         {/*   <NavSecondary items={data.navSecondary} className="mt-auto" /> */}
       </SidebarContent>
       <SidebarFooter>
-        {user ? <NavUser user={user} /> : <div className="p-4">Loading...</div>}
+        <NavUser user={user} loading={loading} />
       </SidebarFooter>
     </Sidebar>
   );
