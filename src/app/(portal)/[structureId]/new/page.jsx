@@ -114,7 +114,7 @@ const handleSubmit = async (e) => {
 
   return (
     <div className="min-h-screen py-8">
-      <div className="max-w-4xl mx-auto px-4">
+      <div className="max-w-full mx-auto px-4">
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Scheda Anagrafica
@@ -124,9 +124,9 @@ const handleSubmit = async (e) => {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-4 space-x-4 grid grid-cols-1 2xl:grid-cols-2 ">
           {/* 1. Informazioni Anagrafiche */}
-          <Card className="shadow-sm gap-2">
+          <Card className="shadow-sm gap-2 ">
             <CardHeader className="">
               <CardTitle className="text-lg flex items-center gap-2">
                 <span className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
