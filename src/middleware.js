@@ -1,60 +1,73 @@
 import { NextResponse } from "next/server";
-import admin from "@/lib/firebase/firebaseAdmin";
-
-const auth = admin.auth()
-
 
 export async function middleware(req) {
   const cookieName = process.env.SESSION_COOKIE_NAME || "session";
   const sessionCookie = req.cookies.get(cookieName)?.value;
-  
-  const publicPaths = ["/login", "/api", "/_next", "/static", "/favicon.ico"];
-  const pathname = req.nextUrl.pathname;
-  
-  // Allow public files
+
+  const { pathname } = req.nextUrl;
+  const publicPaths = ["/login", "/api/auth/sessionLogin", "/_next", "/static", "/favicon.ico"];
+
+  // Allow public paths to pass through
   if (publicPaths.some(p => pathname.startsWith(p))) {
     return NextResponse.next();
   }
-  
-  console.log(`Middleware check for ${pathname}, cookie present: ${!!sessionCookie}`);
-  
+
+  // If there's no cookie, redirect to login
   if (!sessionCookie) {
-    console.log(`No session cookie found for ${pathname}, redirecting to login`);
     const loginUrl = new URL("/login", req.url);
     loginUrl.searchParams.set("from", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-   try {
-    const decodedToken = await auth.verifySessionCookie(sessionCookie, true);
-    console.log(`✓ Session verified directly in middleware for ${decodedToken.uid}`);
+  // Construct the absolute URL for the verification API route
+  // Use the host header as a fallback for local development
+  const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
+  const protocol = req.headers.get('x-forwarded-proto') || 'http';
+  const absoluteUrl = `${protocol}://${host}/api/auth/verify`;
 
-    // You can add user info to the request headers if your pages need it
-    const requestHeaders = new Headers(req.headers);
-    requestHeaders.set('x-user-uid', decodedToken.uid);
-    requestHeaders.set('x-user-email', decodedToken.email || '');
 
-    return NextResponse.next({
-      request: {
-        headers: requestHeaders,
+  // Verify the session by calling the internal API route
+  try {
+    const verifyRes = await fetch(absoluteUrl, {
+      headers: {
+        cookie: req.headers.get("cookie") || "",
+        'cache-control': 'no-cache',
       },
     });
 
-  } catch (error) {
-    console.error('Session verification failed in middleware:', error.message);
+    if (!verifyRes.ok) {
+      throw new Error("Session verification fetch failed");
+    }
 
-    // If verification fails, the cookie is invalid. Clear it and redirect.
-    const loginUrl = new URL('/login', req.url);
+    const { user } = await verifyRes.json();
+    console.log(`✓ Session verified for ${pathname}, user: ${user.uid}`);
+
+    // Pass user info to the page via request headers
+    const requestHeaders = new Headers(req.headers);
+    requestHeaders.set('x-user-uid', user.uid);
+    requestHeaders.set('x-user-email', user.email || '');
+
+    return NextResponse.next({
+        request: {
+            headers: requestHeaders,
+        }
+    });
+
+  } catch (error) {
+    console.log(`Session verification error for ${pathname}:`, error.message);
+
+    // If verification fails, clear the invalid cookie and redirect
+    const loginUrl = new URL("/login", req.url);
     const response = NextResponse.redirect(loginUrl);
-    response.cookies.set(cookieName, '', { maxAge: -1, path: '/' }); // Expire the cookie
+    response.cookies.set(cookieName, "", { maxAge: -1, path: "/" });
 
     return response;
   }
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
-}
+  matcher: ['/((?!api/auth/sessionLogin|_next/static|_next/image|favicon.ico).*)'],
+};
 
 
 /* 
