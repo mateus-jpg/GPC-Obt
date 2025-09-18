@@ -36,6 +36,7 @@ import {
 
 import { useAuth } from "@/context/AuthContext"
 import Logo from "../Logo"
+import { useParams } from "next/navigation"
 
 const data = {
 
@@ -136,11 +137,11 @@ const data = {
   ],
 }
 
-export function StructureSidebar({structureId,
+export function StructureSidebar({
   ...props
 }) {
   const { user, loading } = useAuth();
-
+  const {structureId} = useParams();
 
   
   return (
@@ -158,7 +159,7 @@ export function StructureSidebar({structureId,
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
+        <NavMain items={data.navMain} structureId={structureId} />
         <NavDocuments items={data.documents} />
       {/*   <NavSecondary items={data.navSecondary} className="mt-auto" /> */}
       </SidebarContent>
