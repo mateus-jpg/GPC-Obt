@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server";
+import admin from "@/lib/firebase/firebaseAdmin";
+
+const auth = admin.auth()
+
 
 export async function middleware(req) {
   const cookieName = process.env.SESSION_COOKIE_NAME || "session";
@@ -20,17 +24,53 @@ export async function middleware(req) {
     loginUrl.searchParams.set("from", pathname);
     return NextResponse.redirect(loginUrl);
   }
-  
+
+   try {
+    const decodedToken = await auth.verifySessionCookie(sessionCookie, true);
+    console.log(`✓ Session verified directly in middleware for ${decodedToken.uid}`);
+
+    // You can add user info to the request headers if your pages need it
+    const requestHeaders = new Headers(req.headers);
+    requestHeaders.set('x-user-uid', decodedToken.uid);
+    requestHeaders.set('x-user-email', decodedToken.email || '');
+
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
+
+  } catch (error) {
+    console.error('Session verification failed in middleware:', error.message);
+
+    // If verification fails, the cookie is invalid. Clear it and redirect.
+    const loginUrl = new URL('/login', req.url);
+    const response = NextResponse.redirect(loginUrl);
+    response.cookies.set(cookieName, '', { maxAge: -1, path: '/' }); // Expire the cookie
+
+    return response;
+  }
+}
+
+export const config = {
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+}
+
+
+/* 
+
   // Quick verification via internal API
   try {
-    const verifyUrl = new URL("/api/auth/verify", origin);
-    const verifyRes = await fetch(verifyUrl, {
-      headers: {
+    const decodedToken = await auth.verifySessionCookie(sessionCookie, true);
+
+    const verify_url = new URL("/api/auth/verify", req.url)
+    console.log("Fetching ", verify_url)
+    const verifyRes = await fetch(verify_url, {
+      headers: { 
         cookie: req.headers.get("cookie") || "",
         'cache-control': 'no-cache',
       },
     });
-
     
     if (!verifyRes.ok) {
       const errorData = await verifyRes.text();
@@ -64,7 +104,4 @@ export async function middleware(req) {
     return response;
   }
 }
-
-export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
-}
+*/
