@@ -23,12 +23,14 @@ export async function middleware(req) {
   
   // Quick verification via internal API
   try {
-    const verifyRes = await fetch(new URL("/api/auth/verify", req.url), {
-      headers: { 
+    const verifyUrl = new URL("/api/auth/verify", origin);
+    const verifyRes = await fetch(verifyUrl, {
+      headers: {
         cookie: req.headers.get("cookie") || "",
         'cache-control': 'no-cache',
       },
     });
+
     
     if (!verifyRes.ok) {
       const errorData = await verifyRes.text();
