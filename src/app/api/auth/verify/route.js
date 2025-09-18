@@ -3,10 +3,12 @@ import { auth } from "@/lib/firebase/firebaseAdmin";
 
 export async function GET(req) {
   try {
+    console.log("Called the verify api route")
     const cookieName = process.env.SESSION_COOKIE_NAME || "session";
     const sessionCookie = req.cookies.get(cookieName)?.value;
     
     if (!sessionCookie) {
+      console.log("No session cookie")
       return NextResponse.json({ error: "No session" }, { status: 401 });
     }
     
