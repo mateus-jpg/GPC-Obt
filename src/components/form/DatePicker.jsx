@@ -42,7 +42,7 @@ export default function DatePicker({ value, onChange, label, required }) {
               onChange(date);
               setOpen(false);
             }}
-            captionLayout="dropdown-nav"
+            captionLayout="dropdown"
             fromYear={1920}
             toYear={new Date().getFullYear()}
             initialFocus

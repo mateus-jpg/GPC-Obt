@@ -29,6 +29,9 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useRouter } from "next/navigation"
+import { useLogout } from "@/hooks/use-logout"
+
 function SkeletonUser() {
   return (
     <div className="flex pb-2 pl-2 items-center space-x-4">
@@ -45,6 +48,8 @@ export function NavUser({
   user, loading
 }) {
   const { isMobile } = useSidebar()
+  const router = useRouter()
+  const { logout, isLoggingOut } = useLogout();
   if (loading) {
     return <SkeletonUser />
   }
@@ -108,10 +113,39 @@ export function NavUser({
                 Notifications
               </DropdownMenuItem>
             </DropdownMenuGroup>
-            <DropdownMenuSeparator /> */}
-            <DropdownMenuItem onClick={() => { console.log("logout") }}>
+            <DropdownMenuSeparator />  PLS STUPID MOTHERFUCKER DO NO DELETE THIS COMMENT */}
+            <DropdownMenuItem
+              onClick={async () => {
+                try {
+                  // 1. First, sign out from Firebase client
+                  if (clientAuth.currentUser) {
+                    await signOut(clientAuth);
+                    console.log("Firebase client logout successful");
+                  }
+
+                  // 2. Then call server logout to clear session cookie
+                  const response = await fetch("/api/auth/sessionLogout", {
+                    method: 'POST'
+                  });
+
+                  if (!response.ok) {
+                    console.warn("Server logout failed, but continuing...");
+                  }
+
+                  // 3. Navigate to login page
+                  router.push("/login");
+
+                } catch (error) {
+                  console.error("Logout error:", error);
+
+                  // Even if there's an error, try to navigate to login
+                  // This ensures user isn't stuck in a bad state
+                  router.push("/login");
+                }
+              }}
+            >
               <IconLogout />
-              Log out
+              {isLoggingOut ? "Logging out..." : "Log out"}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

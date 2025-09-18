@@ -12,17 +12,20 @@ import DatePicker from "@/components/form/DatePicker";
 import Countries from "@/data/countries.json"; // Assuming you have a countries.json file
 import { CreateCombobox, CreateMultiCombobox } from "@/components/form/Combobox";
 import { useParams } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
+
 
 
 export default function AnagraficaForm({params}) {
   const { structureId } = React.use(params);
-
+  const { user } = useAuth();
   const [formData, setFormData] = useState({
     // Informazioni Anagrafiche
     cognome: "",
     nome: "",
     sesso: "",
     dataDiNascita: undefined,
+    luogoDiNascita: "",
     cittadinanza: [],
     comuneDiDomicilio: "",
     telefono: "",
@@ -51,7 +54,6 @@ export default function AnagraficaForm({params}) {
     // Referral
     referral: "",
     referralAltro: "",
-    registeredBy: structureId || null,
     canBeAccessedBy: [structureId] || [],
 
   });
@@ -60,24 +62,55 @@ export default function AnagraficaForm({params}) {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    console.log("Submitting form data:", formData);
-    /* try {
-      const res = await fetch("/api/anagrafica", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
-      });
+const handleSubmit = async (e) => {
+  e.preventDefault();
 
-      if (!res.ok) throw new Error("Errore nel salvataggio");
+  try {
+    // Assicurati di avere l'utente loggato
+    if (!user || !user.uid) throw new Error("Utente non autenticato");
 
-      alert("Dati salvati correttamente ✅");
-    } catch (err) {
-      console.error(err);
-      alert("Errore durante il salvataggio ❌");
-    } */
-  };
+    // Prepara il payload
+    const payload = {
+      ...formData,
+      registeredBy: user.uid, // UID dell'operatore
+      registeredByStructure: structureId, // struttura selezionata
+    };
+
+    // Sostituisci referral se necessario
+    if (payload.referral === "Altro" || payload.referral === "Ente partner") {
+      if (payload.referralAltro?.trim()) {
+        payload.referral = payload.referralAltro.trim();
+      }
+    }
+
+    // Rimuovi referralAltro dal payload (non serve salvare)
+    delete payload.referralAltro;
+
+    // POST verso l'API
+    const res = await fetch("/api/anagrafica/new", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Errore durante il salvataggio");
+    }
+
+    const savedData = await res.json();
+    console.log("Anagrafica salvata:", savedData);
+    alert("Dati salvati correttamente ✅");
+
+    // Eventuale reset form o redirect
+    // setFormData(initialFormData); 
+    // router.push("/dashboard");
+
+  } catch (err) {
+    console.error("Errore submit anagrafica:", err);
+    alert("Errore durante il salvataggio ❌: " + err.message);
+  }
+};
 
   return (
     <div className="min-h-screen py-8">
@@ -121,7 +154,7 @@ export default function AnagraficaForm({params}) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
               <CreateMultiCombobox label="Paese di provenienza / Cittadinanza *" values={formData.cittadinanza} onChange={(val) => handleChange("cittadinanza", val)} options={Countries.map(c => c.name)} placeholder="Seleziona uno o più paesi" />
-              
+              <CreateCombobox label="Luogo di nascita *" value={formData.luogoDiNascita} onChange={(val) => handleChange("luogoDiNascita", val)} options={Countries.map(c => c.name)} placeholder="Seleziona uno o più paesi" />
               <div className="space-y-2">
                 <Label htmlFor="comuneDiDomicilio">Comune di domicilio</Label>
                 <Input id="comuneDiDomicilio" value={formData.comuneDiDomicilio} onChange={(e) => handleChange("comuneDiDomicilio", e.target.value)} placeholder="Es. Verona" />
@@ -132,12 +165,12 @@ export default function AnagraficaForm({params}) {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="telefono">Numero di cellulare *</Label>
-                  <Input id="telefono" value={formData.telefono} onChange={(e) => handleChange("telefono", e.target.value)} placeholder="+39 123 456789" required />
+                  <Label htmlFor="telefono">Numero di cellulare </Label>
+                  <Input id="telefono" value={formData.telefono} onChange={(e) => handleChange("telefono", e.target.value)} placeholder="+39 123 456789"  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email *</Label>
-                  <Input id="email" type="email" value={formData.email} onChange={(e) => handleChange("email", e.target.value)} placeholder="utente@esempio.com" required />
+                  <Label htmlFor="email">Email </Label>
+                  <Input id="email" type="email" value={formData.email} onChange={(e) => handleChange("email", e.target.value)} placeholder="utente@esempio.com"  />
                 </div>
               </div>
             </CardContent>
@@ -228,6 +261,7 @@ export default function AnagraficaForm({params}) {
                   ]}
                   placeholder="Seleziona stato legale"
                   />
+                  
                 <CreateMultiCombobox
                   label="Situazione abitativa * (risposte multiple)"
                   values={formData.situazioneAbitativa}

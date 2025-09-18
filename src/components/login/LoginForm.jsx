@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { clientAuth } from "@/lib/firebase/firebaseClient"; // your Firebase client SDK init
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -26,30 +26,70 @@ export function LoginForm({
   const [error, setError] = useState(null);
   const router = useRouter();
 
+  // Clean up any existing Firebase auth state on mount
+  useEffect(() => {
+    const cleanup = async () => {
+      try {
+        // Wait for auth to initialize
+        await new Promise(resolve => {
+          const unsubscribe = clientAuth.onAuthStateChanged(user => {
+            unsubscribe();
+            resolve();
+          });
+        });
+        
+        if (clientAuth.currentUser) {
+          console.log("Cleaning up existing auth state");
+          await signOut(clientAuth);
+        }
+      } catch (error) {
+        console.log("Client auth cleanup:", error.message);
+      }
+    };
+    cleanup();
+  }, []);
+
   async function handleLogin(e) {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
     try {
-      // 1. Sign in with Firebase
+      // 1. Sign out any existing user first (cleanup)
+      if (clientAuth.currentUser) {
+        await signOut(clientAuth);
+      }
+
+      // 2. Sign in with Firebase
       const userCred = await signInWithEmailAndPassword(clientAuth, email, password);
       const idToken = await userCred.user.getIdToken();
 
-      // 2. Exchange ID token for a session cookie
+      // 3. Exchange ID token for a session cookie
       const res = await fetch("/api/auth/sessionLogin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ idToken }),
+        credentials: 'include', // Ensure cookies are included
       });
 
-      if (!res.ok) throw new Error("Session creation failed");
+      console.log("Session login response:", res);
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Session creation failed");
+      }
+      
+      console.log("✓ Session cookie created");
 
-      // 3. Redirect to a protected route
-      router.push("/dashboard");
+      // 4. Small delay to ensure cookie is properly set before redirect
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // 5. Use window.location instead of router.push for hard navigation
+      // This ensures the middleware runs with the fresh cookie
+      window.location.href = "/dashboard";
     } catch (err) {
-      console.error(err);
-      setError("Invalid email or password");
+      console.error("Login error:", err);
+      setError(err.message.includes("auth/") ? "Invalid email or password" : err.message);
     } finally {
       setLoading(false);
     }

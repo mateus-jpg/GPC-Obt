@@ -21,18 +21,28 @@ export async function POST(req) {
       uid: decodedToken.uid 
     });
     
-    // Set secure cookie (always secure in Firebase App Hosting)
-    response.cookies.set(process.env.SESSION_COOKIE_NAME || "session", sessionCookie, {
+    const cookieName = process.env.SESSION_COOKIE_NAME || "session";
+    
+    // Set new secure cookie with proper attributes
+    response.cookies.set(cookieName, sessionCookie, {
       httpOnly: true,
-      secure: true, // Always HTTPS in Firebase App Hosting
+      secure: process.env.NODE_ENV === "production", // Use env variable
       sameSite: "lax",
       maxAge: expiresIn / 1000,
       path: "/",
+      // Add domain if needed for subdomain support
+      // domain: process.env.COOKIE_DOMAIN,
     });
+    
+    console.log(`Created session for user: ${decodedToken.uid}`);
     
     return response;
   } catch (error) {
     console.error("Session login error:", error);
-    return NextResponse.json({ error: "Authentication failed" }, { status: 401 });
+    return NextResponse.json({ 
+      error: error.message.includes('Token expired') 
+        ? "Session expired, please try again" 
+        : "Authentication failed" 
+    }, { status: 401 });
   }
 }
