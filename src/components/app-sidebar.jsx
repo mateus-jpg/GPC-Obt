@@ -43,7 +43,7 @@ const data = {
   navMain: [
     {
       title: "Anagrafica",
-      url: "#",
+      url: "anagrafica",
       icon: IconUsers,
     },
     {
@@ -158,7 +158,7 @@ export function PortalSideBar({
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
+        <NavMain items={data.navMain} structureId={structureId} />
         <NavDocuments items={data.documents} />
       {/*   <NavSecondary items={data.navSecondary} className="mt-auto" /> */}
       </SidebarContent>

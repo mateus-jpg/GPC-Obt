@@ -9,10 +9,10 @@ import { AuthProvider } from "@/context/AuthContext";
 
 
 export default async function Layout({ children, params }) {
-
+  const { structureId } = await params;
   return (
     <>
-      <StructureSidebar variant="inset"  />
+      <StructureSidebar variant="inset" structureId={structureId} />
       <SidebarInset>
         <SiteHeader />
         <div className="flex flex-1 flex-col">

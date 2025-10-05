@@ -202,10 +202,11 @@ export function AnagraficaTable({ rows }) {
     <div className="h-full w-full">
       <Input
         type="text"
+
         placeholder="Cerca Nome, Cognome, Email, Telefono..."
         value={globalFilter}
         onChange={(e) => setGlobalFilter(e.target.value)}
-        className="mb-3 p-1 max-w-xs w-[30%]"
+        className="mb-8 p-1 max-w-lg w-full "
       />
       <MaterialReactTable
         columns={columns}

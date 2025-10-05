@@ -44,7 +44,7 @@ const data = {
   navMain: [
     {
       title: "Anagrafica",
-      url: "#",
+      url: "anagrafica",
       icon: IconUsers,
     },
     {
@@ -143,7 +143,7 @@ export function StructureSidebar({
   const { user, loading } = useAuth();
   const {structureId} = useParams();
 
-  
+    console.log(structureId);
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>

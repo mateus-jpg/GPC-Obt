@@ -1,8 +1,9 @@
 "use client"
 
 import { IconCirclePlusFilled, IconMail } from "@tabler/icons-react";
-
+import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button"
+import clsx from "clsx";
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -21,6 +22,9 @@ export function NavMain({
     structureId = ""
   }
   const router = useRouter()
+  const pathname = usePathname();
+  console.log("Structure ID in NavMain:", structureId);
+  console.log("current path:", pathname);
   return (
     <SidebarGroup>
       <SidebarGroupContent className="flex flex-col gap-2">
@@ -41,7 +45,9 @@ export function NavMain({
         <SidebarMenu>
           {items.map((item) => (
             <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton tooltip={item.title}>
+              <SidebarMenuButton tooltip={item.title} onClick={() => router.push(`${structureId}/${item.url}`)} disabled={pathname === `/${structureId}/${item.url}`} 
+
+              >
                 {item.icon && <item.icon />}
                 <span>{item.title}</span>
               </SidebarMenuButton>
