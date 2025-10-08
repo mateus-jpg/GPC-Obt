@@ -11,6 +11,7 @@ import admin from "@/lib/firebase/firebaseAdmin";
 import { Status, StatusIndicator, StatusLabel } from '@/components/ui/shadcn-io/status';
 import { Button } from "@/components/ui/button";
 import AccessDialog from "@/components/Anagrafica/AccessDialog/AccessDialog";
+import EventDialog from "@/components/Anagrafica/EventDialog/EventDialog";
 
 async function getAnagraficaData(id) {
   const headersList = await headers();
@@ -157,7 +158,10 @@ export default async function AnagraficaViewPage({ params }) {
           Torna alla lista
         </Link>
       </Button>
-      <AccessDialog/>
+      <div className="flex gap-2">
+      <EventDialog anagraficaId={anagrafica.id} />
+      <AccessDialog anagraficaId={anagrafica.id} />
+      </div>
       </div>
       <Otherinfo anagrafica={anagrafica} />
       {/* Metadata */}

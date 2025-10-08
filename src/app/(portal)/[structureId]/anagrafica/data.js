@@ -2,6 +2,7 @@
 'use server';
 
 export async function getData(structure) {
+  //TODO : fare check permessi
   const admin = (await import("@/lib/firebase/firebaseAdmin")).default;
   const snap = await admin
     .firestore()

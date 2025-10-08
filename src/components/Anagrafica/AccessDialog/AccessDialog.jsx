@@ -16,78 +16,85 @@ import { Combobox, CreateMultiCombobox } from "@/components/form/Combobox";
 import { AccessTypes } from "./AccessTypes";
 import clsx from "clsx";
 import { TiptapEditor } from "@/components/tiptap-editor";
-
-
-export default function AccessDialog() {
+import { Dropzone } from "@/components/ui/shadcn-io/dropzone"; // 👈 import della dropzone di shadcn
+import { IconDoorEnter } from "@tabler/icons-react";
+import { createAccessAction } from "@/actions/anagrafica/access"; // Server Action sicura
+export default function AccessDialog({ anagraficaId }) {
   const [open, setOpen] = useState(false);
   const [content, setContent] = useState("");
   const [selectedType, setSelectedType] = useState("");
   const [selectedSubcategories, setSelectedSubcategories] = useState([]);
   const [altroText, setAltroText] = useState("");
+  const [files, setFiles] = useState([]); // 👈 nuovi file caricati con la dropzone
 
   // Calcola le sottocategorie basandoti sul tipo selezionato
   const currentType = AccessTypes.find((t) => t.label === selectedType);
-  const [subCategories, setSubCategories] = useState(currentType ? currentType.subCategories : []);
+  const [subCategories, setSubCategories] = useState(
+    currentType ? currentType.subCategories : []
+  );
+
   const isFormValid =
     !!selectedType &&
     selectedSubcategories.length > 0 &&
     (!selectedSubcategories.includes("Altro") || altroText.trim() !== "");
 
-  // Funzione per resettare tutti gli stati
   const resetForm = () => {
     setContent("");
     setSelectedType("");
     setSelectedSubcategories([]);
     setAltroText("");
+    setFiles([]);
   };
 
-  // Gestione apertura/chiusura dialog
   const handleOpenChange = (newOpen) => {
     setOpen(newOpen);
-    if (!newOpen) {
-      // Reset quando il dialog si chiude
-      resetForm();
+    if (!newOpen) resetForm();
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!isFormValid) return;
+
+    try {
+      const payload = {
+        anagraficaId, // la persona o entità collegata all'accesso
+        tipoAccesso: selectedType, 
+        sottoCategorie: selectedSubcategories,
+        altro: selectedSubcategories.includes("Altro") ? altroText.trim() : undefined,
+        note: content?.trim() || undefined,
+        files, 
+      };
+      console.log(files)
+      // Chiamata alla Server Action sicura
+      const result = await createAccessAction(payload);
+
+      console.log('Accesso creato con successo:', result);
+
+      // Reset e chiusura dialog
+      /* setOpen(false);
+      resetForm(); */
+    } catch (error) {
+      console.error('Errore durante la creazione dell’accesso:', error);
+      alert('Si è verificato un errore durante la creazione dell’accesso.');
     }
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    console.log("currentType", currentType);
-    console.log("subcategories", selectedSubcategories);
-    
-    if (!isFormValid) return;
-
-    const payload = {
-      tipoAccesso: selectedType,
-      sottocategorie: selectedSubcategories,
-      altro: selectedSubcategories.includes("Altro") ? altroText.trim() : undefined,
-      contenuto: content
-    };
-
-    console.log("👉 Dati da salvare:", payload);
-    
-    // Chiudi il dialog e resetta dopo il salvataggio
-    //setOpen(false);
-    //resetForm();
-  };
-
   const handleTypeChange = (value) => {
-    // Aggiorna il tipo selezionato
     setSelectedType(value || "");
-    
-    // Reset delle sottocategorie e del testo altro quando cambia il tipo
     setSelectedSubcategories([]);
     setAltroText("");
-    
-    // Log per debug
+
     const newType = AccessTypes.find((t) => t.label === value);
     setSubCategories(newType ? newType.subCategories : []);
   };
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button>Nuovo accesso</Button>
+      <DialogTrigger asChild className=" cursor-pointer">
+        <Button className={""}>Nuovo accesso
+          <IconDoorEnter className="ml-1" />
+        </Button>
+
       </DialogTrigger>
 
       <DialogContent className="max-w-4xl min-w-4xl">
@@ -107,12 +114,8 @@ export default function AccessDialog() {
             />
           </div>
 
-          <div 
-            className={clsx(
-              "grid gap-4 align-top grid-cols-2"
-            )}
-          >
-            {/* STEP 2 — Selezione sottocategorie (appears after a type is selected) */}
+          <div className={clsx("grid gap-4 align-top grid-cols-2")}>
+            {/* STEP 2 — Sottocategorie */}
             {selectedType && subCategories.length > 0 && (
               <div className="grid gap-2">
                 <CreateMultiCombobox
@@ -120,10 +123,7 @@ export default function AccessDialog() {
                   values={selectedSubcategories}
                   onChange={(values) => {
                     setSelectedSubcategories(values);
-                    // Se "Altro" non è più selezionato, pulisci il campo di testo
-                    if (!values.includes("Altro")) {
-                      setAltroText("");
-                    }
+                    if (!values.includes("Altro")) setAltroText("");
                   }}
                   options={subCategories}
                   placeholder="Seleziona o aggiungi sottocategorie..."
@@ -131,7 +131,7 @@ export default function AccessDialog() {
               </div>
             )}
 
-            {/* STEP 3 — Input for "Altro" (appears if "Altro" is a selected subcategory) */}
+            {/* STEP 3 — Input Altro */}
             {selectedSubcategories.includes("Altro") && (
               <div className="flex flex-col gap-2 align-top">
                 <Label htmlFor="altro">Specifica "Altro"</Label>
@@ -146,7 +146,7 @@ export default function AccessDialog() {
             )}
           </div>
 
-          {/* Editor di testo */}
+          {/* STEP 4 — Editor di testo */}
           <div className="grid gap-2">
             <Label>Note aggiuntive</Label>
             <TiptapEditor
@@ -154,6 +154,45 @@ export default function AccessDialog() {
               onChange={setContent}
               placeholder="Inserisci qui eventuali note o dettagli..."
             />
+          </div>
+
+          {/* STEP 5 — Dropzone per allegati */}
+          <div className="grid gap-2">
+            <Label>Allegati</Label>
+            <Dropzone
+              onDrop={(acceptedFiles) => {
+                setFiles((prev) => [...prev, ...acceptedFiles]);
+              }}
+              className="border border-dashed border-gray-300 rounded-lg p-4 cursor-pointer"
+            >
+              <p className="text-sm text-gray-500">
+                Trascina qui i file o clicca per selezionarli
+              </p>
+            </Dropzone>
+
+            {/* File list preview */}
+            {files.length > 0 && (
+              <ul className="text-sm mt-2 space-y-1">
+                {files.map((file, idx) => (
+                  <li
+                    key={idx}
+                    className="flex justify-between items-center border rounded px-3 py-1 bg-muted/30"
+                  >
+                    <span className="truncate max-w-[80%]">{file.name}</span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        setFiles((prev) => prev.filter((_, i) => i !== idx))
+                      }
+                    >
+                      Rimuovi
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           <DialogFooter>

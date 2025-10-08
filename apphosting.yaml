@@ -52,6 +52,13 @@ env:
       - BUILD
       - RUNTIME
 
+
+  - variable: FIREBASE_PROJECT_ID
+    value: "gpc-obt"
+    availability:
+      - BUILD
+      - RUNTIME
+
   - variable: SESSION_COOKIE_MAX_AGE
     value: 1209600000
     availability:
