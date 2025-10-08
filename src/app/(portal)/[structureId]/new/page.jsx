@@ -113,7 +113,7 @@ const handleSubmit = async (e) => {
 };
 
   return (
-    <div className="min-h-screen py-8">
+    <div className="min-h-screen">
       <div className="max-w-full mx-auto px-4">
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
@@ -440,7 +440,7 @@ const handleSubmit = async (e) => {
           </Card>
 
           {/* Submit Button */}
-          <div className="flex justify-center pt-2">
+          <div className="flex justify-center pt-2 col-span-2">
             <Button type="submit" size="lg" className="w-full md:w-auto min-w-[200px] h-12 text-base font-medium">
               💾 Salva Anagrafica
             </Button>

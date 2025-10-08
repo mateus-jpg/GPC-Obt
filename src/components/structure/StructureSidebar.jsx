@@ -33,10 +33,12 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-
+import {StructureSwitcher} from "@/components/structure-switcher"
 import { useAuth } from "@/context/AuthContext"
 import Logo from "../Logo"
 import { useParams } from "next/navigation"
+import { Skeleton } from "@mui/material"
+
 
 const data = {
 
@@ -47,7 +49,7 @@ const data = {
       url: "anagrafica",
       icon: IconUsers,
     },
-    {
+   /*  {
       title: "Gestione Community",
       url: "#",
       icon: IconFolder,
@@ -66,7 +68,7 @@ const data = {
       title: "Legale",
       url: "#",
       icon: IconFileDescription,
-    },
+    }, */
   ],
   navClouds: [
     {
@@ -119,7 +121,7 @@ const data = {
     },
   ],
   documents: [
-    {
+   /*  {
       name: "Archivio Generale",
       url: "#",
       icon: IconDatabase,
@@ -133,17 +135,28 @@ const data = {
       name: "Modulistica",
       url: "#",
       icon: IconFileWord,
-    },
+    }, */
   ],
 }
 
 export function StructureSidebar({
   ...props
 }) {
-  const { user, loading } = useAuth();
+  const { user, loading, availableStructures, currentStructure, setCurrentStructure } = useAuth();
   const {structureId} = useParams();
 
-    console.log(structureId);
+
+  React.useEffect(() => {
+
+    if (structureId) {
+      const structure = availableStructures.find(s => s.id === structureId);
+      if (structure) {
+        setCurrentStructure(structure);
+      }
+
+    }
+  }, [structureId, availableStructures]);
+
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
@@ -156,11 +169,20 @@ export function StructureSidebar({
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>
+          <SidebarMenuItem>
+            {availableStructures ? <StructureSwitcher structures={availableStructures} selectedStructure={currentStructure} /> : 
+            <Skeleton variant="rectangular" width={210} height={40} className="rounded-lg" />
+            }
+          </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} structureId={structureId} />
+        {currentStructure && 
+        <>
+        <NavMain items={data.navMain} structureId={currentStructure.id} />
         <NavDocuments items={data.documents} />
+      </>
+}
       {/*   <NavSecondary items={data.navSecondary} className="mt-auto" /> */}
       </SidebarContent>
       <SidebarFooter>

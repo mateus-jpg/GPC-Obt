@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { signInWithEmailAndPassword, signOut as firebaseSignOut, onAuthStateChanged } from "firebase/auth";
 import { clientAuth as auth } from "@/lib/firebase/firebaseClient";
-import { getFirestore, doc, getDoc } from "firebase/firestore";
+import { getFirestore, doc, getDoc, query, getDocs, collection, where, FieldPath} from "firebase/firestore";
 
 const db = getFirestore();
 
@@ -17,7 +17,8 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-
+  const [availableStructures, setAvailableStructures] = useState([]);
+  const [currentStructure, setCurrentStructure] = useState(null);
   // Fetch /api/auth/me and merge operator document
   const fetchUserWithOperator = useCallback(async () => {
     try {
@@ -35,6 +36,14 @@ export const AuthProvider = ({ children }) => {
         const operatorDoc = await getDoc(doc(db, "operators", operatorId));
         if (operatorDoc.exists()) {
           fullUser = { ...fullUser, ...operatorDoc.data() };
+
+          const structures =  fullUser.structureIds || [];
+          //debugger
+          
+            const structuresData = await getDocs(query(collection(db, "structures"), where("__name__", "in", structures)));
+            const structuresWithId = structuresData.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            console.log("Fetched structures data with IDs:", structuresWithId);
+            setAvailableStructures(structuresWithId);
         } else {
           console.warn("Operator document not found for", operatorId);
         }
@@ -98,7 +107,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithEmail, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signInWithEmail, signOut, availableStructures, currentStructure, setCurrentStructure }}>
       {children}
     </AuthContext.Provider>
   );

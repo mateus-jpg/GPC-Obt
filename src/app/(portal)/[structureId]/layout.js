@@ -12,7 +12,7 @@ export default async function Layout({ children, params }) {
   const { structureId } = await params;
   return (
     <>
-      <StructureSidebar variant="inset" structureId={structureId} />
+      <StructureSidebar variant="inset"/>
       <SidebarInset>
         <SiteHeader />
         <div className="flex flex-1 flex-col">

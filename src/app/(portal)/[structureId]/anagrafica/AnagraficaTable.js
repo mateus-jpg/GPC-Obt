@@ -6,6 +6,8 @@ import { useMemo } from 'react';
 import { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { FileDown } from "lucide-react";
+import Link from "next/link";
+import { SquareArrowOutUpRight, View, ExternalLink, HousePlus } from "lucide-react";
 
 const csvConfig = mkConfig({
   fieldSeparator: ',',
@@ -14,20 +16,20 @@ const csvConfig = mkConfig({
   filename: 'anagrafica_export'
 });
 
-// Helper function to format timestamps
+
 const formatTimestamp = (ts, includeTime = false) => {
   if (!ts?._seconds) return '';
   const date = new Date(ts._seconds * 1000);
   return includeTime ? date.toLocaleString('it-IT') : date.toLocaleDateString('it-IT');
 };
 
-// Helper function to format array fields
+
 const formatArrayField = (arr) => {
   if (!Array.isArray(arr) || arr.length === 0) return '';
   return arr.join('; ');
 };
 
-// Transform data for export with proper formatting
+
 const transformDataForExport = (data) => {
   return data.map(row => ({
     nome: row.nome || '',
@@ -59,21 +61,22 @@ const transformDataForExport = (data) => {
 };
 
 const columnsDef = [
+  { accessorKey: 'id', header: 'ID', enableHiding: true },
   { accessorKey: 'nome', header: 'Nome (solo)', enableHiding: true },
   { accessorKey: 'cognome', header: 'Cognome', enableHiding: true },
-  { 
-    accessorFn: (row) => `${row.nome || ''} ${row.cognome || ''}`.trim(), 
+  {
+    accessorFn: (row) => `${row.nome || ''} ${row.cognome || ''}`.trim(),
     id: 'nome_completo',
-    header: 'Nome', 
-    size: 150, 
-    enableHiding: false 
+    header: 'Nome',
+    size: 150,
+    enableHiding: false
   },
   { accessorKey: 'sesso', header: 'Sesso', size: 100 },
   {
     accessorKey: 'dataDiNascita',
     header: 'Data di nascita',
     Cell: ({ cell }) => formatTimestamp(cell.getValue()),
-    accessorFn: (row) => row.dataDiNascita // Keep original for sorting
+    accessorFn: (row) => row.dataDiNascita
   },
   { accessorKey: 'luogoDiNascita', header: 'Luogo di nascita' },
   {
@@ -86,14 +89,14 @@ const columnsDef = [
       const first = arr[0];
       const extraCount = arr.length - 1;
       const renderedCell = extraCount > 0
-        ? `${first} (+${extraCount})`  
+        ? `${first} (+${extraCount})`
         : first;
       return (
 
-          <p className='px-1'>{renderedCell}</p>
+        <p className='px-1'>{renderedCell}</p>
       );
     },
-    accessorFn: (row) => row.cittadinanza // Keep original array for export
+    accessorFn: (row) => row.cittadinanza
   },
   { accessorKey: 'comuneDiDomicilio', header: 'Comune di domicilio' },
   { accessorKey: 'telefono', header: 'Telefono', size: 120 },
@@ -115,7 +118,7 @@ const columnsDef = [
         </span>
       );
     },
-    accessorFn: (row) => row.situazioneAbitativa // Keep original array
+    accessorFn: (row) => row.situazioneAbitativa
   },
   { accessorKey: 'situazioneLavorativa', header: 'Situazione lavorativa' },
   { accessorKey: 'titoloDiStudioOrigine', header: 'Titolo di studio (origine)', enableHiding: true },
@@ -140,7 +143,7 @@ const columnsDef = [
         </div>
       );
     },
-    accessorFn: (row) => row.vulnerabilita // Keep original array
+    accessorFn: (row) => row.vulnerabilita
   },
   { accessorKey: 'intenzioneItalia', header: 'Intenzione rimanere in Italia' },
   { accessorKey: 'paeseDestinazione', header: 'Paese destinazione' },
@@ -150,27 +153,27 @@ const columnsDef = [
     header: 'Creato il',
     enableHiding: true,
     Cell: ({ cell }) => formatTimestamp(cell.getValue(), true),
-    accessorFn: (row) => row.createdAt // Keep original for sorting
+    accessorFn: (row) => row.createdAt
   },
   {
     accessorKey: 'updatedAt',
     header: 'Aggiornato il',
     enableHiding: true,
     Cell: ({ cell }) => formatTimestamp(cell.getValue(), true),
-    accessorFn: (row) => row.updatedAt // Keep original for sorting
+    accessorFn: (row) => row.updatedAt
   },
 ];
 
-export function AnagraficaTable({ rows }) {
+export function AnagraficaTable({ rows, structureId }) {
   const [globalFilter, setGlobalFilter] = useState('');
-  
+
   const columns = useMemo(() => columnsDef, []);
 
   const filteredRows = useMemo(() => {
     if (!globalFilter) return rows;
     const searchTerm = globalFilter.toLowerCase();
     return rows.filter((row) => {
-      // Search in nome, cognome, and other text fields
+
       return (
         (row.nome && row.nome.toLowerCase().includes(searchTerm)) ||
         (row.cognome && row.cognome.toLowerCase().includes(searchTerm)) ||
@@ -182,17 +185,17 @@ export function AnagraficaTable({ rows }) {
   }, [rows, globalFilter]);
 
   const handleExportRows = (tableRows) => {
-    // Extract original data from table rows
+
     const rowData = tableRows.map((row) => row.original);
-    // Transform data for export
+
     const exportData = transformDataForExport(rowData);
-    // Generate and download CSV
+
     const csv = generateCsv(csvConfig)(exportData);
     download(csvConfig)(csv);
   };
 
   const handleExportData = () => {
-    // Transform all filtered data for export
+
     const exportData = transformDataForExport(filteredRows);
     const csv = generateCsv(csvConfig)(exportData);
     download(csvConfig)(csv);
@@ -211,20 +214,35 @@ export function AnagraficaTable({ rows }) {
       <MaterialReactTable
         columns={columns}
         data={filteredRows}
+        enableRowActions
+        /* enableRowPinning */
         enableColumnFilters
         enableColumnOrdering
-        enableGlobalFilter={false} // We're using custom filter
+        enableGlobalFilter={false}
         state={{
           isLoading: !rows,
           showAlertBanner: filteredRows.length === 0,
         }}
+        displayColumnDefOptions={<> </>}
+        
+        renderRowActions={({ row }) => (
+          <div className="flex gap-2 flex-row justify-around items-center ">
+          <Link
+            href={`/${structureId}/anagrafica/${row.original.id}`}
+          >
+            <View  className="size-4" />
+          </Link>
+          <HousePlus className="size-4" />
+          </div>
+        )}
         initialState={{
           pagination: { pageSize: 25, pageIndex: 0 },
           density: 'compact',
           columnVisibility: {
-            // Hide these columns from view but keep in export
+            id: false,
             nome: false,
             cognome: false,
+            intenzioneItalia: false,
             titoloDiStudioOrigine: false,
             titoloDiStudioItalia: false,
             createdAt: false,

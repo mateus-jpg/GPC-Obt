@@ -45,12 +45,17 @@ export function NavMain({
         <SidebarMenu>
           {items.map((item) => (
             <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton tooltip={item.title} onClick={() => router.push(`${structureId}/${item.url}`)} disabled={pathname === `/${structureId}/${item.url}`} 
-
-              >
+              <SidebarMenuButton 
+              tooltip={item.title} 
+              onClick={() => router.push(`/${structureId}/${item.url}`)} 
+              disabled={pathname === `/${structureId}/${item.url}`}
+              isActive={pathname === `/${structureId}/${item.url}`}
+              variant={pathname === `/${structureId}/${item.url}` ? "outline" : "default"}
+              className={clsx("disabled:font-bold  disabled:text-black disabled:text", item.className)}>
+                
                 {item.icon && <item.icon />}
                 <span>{item.title}</span>
-              </SidebarMenuButton>
+              </SidebarMenuButton> 
             </SidebarMenuItem>
           ))}
         </SidebarMenu>

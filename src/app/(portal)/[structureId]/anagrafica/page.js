@@ -10,7 +10,7 @@ export default async function AnagraficaPage({ params }) {
   const data = JSON.parse(rows);
   return (<div className="p-4">
 
-  <AnagraficaTable rows={data} />
+  <AnagraficaTable rows={data} structureId={structureId} />
   </div>
   );
 }

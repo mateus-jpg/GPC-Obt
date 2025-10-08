@@ -1,8 +1,69 @@
 # Cose da fare pensieri e persone
 
+
+
+TODO :
+- [x] Iscrizione Anagrafica
+- [ ] Pagina Anagrafica
+- [ ] Accessi 
+- [ ] Dashboard 
+- [ ] Altro
+
+
+## Pagina anagrafica
+Dalla sidebar
+ricerca per utente  + tabella 
+
+### Tabella
+- Esporta excel
+
+- nome cognome 
+- data di nascita
+- Tutte le info
+es. https://www.material-react-table.com/docs/examples/advanced
+
+
+Preview: 
+Ultimo Intervento. 
+
+
+
+Action: 
+Scarica Scheda definsca scaricare schde 
+Condividi altro centro o altra persona 
+
+
+
+## Dashboard page 
+
+Ricerca anagrafica 
+
+
+
+## Accessi 
+
+Aree 
+
+ per ogni presa in carico ci le opzioni a cui è stato indirizzato  (Classificazione dell'intervento *): 
+  - Presa in carico (il bisogno dell'utente è soddisfatto attraverso presa in carico specifica da parte di un operatore del CC) 
+- Informativa (il bisogno dell'utente è soddisfatto fornendo informazioni e/o orientamento generale) 
+ - Supporto indiretto / Referral verso altri servizi (l'utente viene inviato verso uno specifico servizio del territorio adatto a rispondere al suo bisogno) > aggiungere ente a cui è stato fatto il refereal 
+ 
+
+
+
+- [ ] Legale : 
+
+- [ ] Lavoro
+- [ ] Sanitario
+- [ ] Educativo
+- [ ] Amministrativo/Fiscale
+- [ ] Sociale
+- [ ] Abitare
+
+
 Dashboard Principale :
 - Tolto chart visitori 
-
 
 
 
@@ -17,16 +78,6 @@ da riprodurre in automatico
 
 Nuovi dati: 
 
-Suddivisione 
-Legale
-Lavoro
-Sanitario
-
-Educativo
-
-Amministrativo/Fiscale
-Sociale
-Abitare
 
 
 La persona è stata inviata da qualcuno -> DropDown

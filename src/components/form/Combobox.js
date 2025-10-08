@@ -1,29 +1,29 @@
-"use client"; // Add this directive if you're using Next.js App Router
+"use client";
 
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
+import { ScrollArea } from "../ui/scroll-area";
 
 // A reusable Combobox with "create" functionality
 export function CreateCombobox({ label, value, onChange, options, placeholder }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState(options);
-  const [searchQuery, setSearchQuery] = useState(""); // State to hold the input value
+  const [searchQuery, setSearchQuery] = useState("");
 
-  // Check if the current search query can be a new item
   const isNewItem = searchQuery.length > 0 && !items.some(
     (item) => item.toLowerCase() === searchQuery.toLowerCase()
   );
 
   const handleSelect = (selectedItem) => {
     onChange(selectedItem);
-    setSearchQuery(""); // Reset search query on select
+    setSearchQuery("");
     setOpen(false);
   };
 
@@ -40,7 +40,7 @@ export function CreateCombobox({ label, value, onChange, options, placeholder })
       <Label>{label}</Label>
       <Popover open={open} onOpenChange={(isOpen) => {
         setOpen(isOpen);
-        if (!isOpen) setSearchQuery(""); // Reset search on close
+        if (!isOpen) setSearchQuery("");
       }}>
         <PopoverTrigger asChild>
           <Button
@@ -51,36 +51,37 @@ export function CreateCombobox({ label, value, onChange, options, placeholder })
             {value || placeholder}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="p-0 w-[300px]">
-          <Command shouldFilter={true}>
+        <PopoverContent className="p-0 w-[300px]" align="start">
+          <Command shouldFilter={false} className="overflow-hidden">
             <CommandInput
               placeholder={`Cerca o aggiungi ${label.toLowerCase()}...`}
               value={searchQuery}
               onValueChange={setSearchQuery}
             />
             <CommandEmpty>Nessun risultato.</CommandEmpty>
-            <CommandGroup>
-              {items.map((opt) => (
-                <CommandItem
-                  key={opt}
-                  value={opt}
-                  onSelect={() => handleSelect(opt)}
-                >
-                  {opt}
-                </CommandItem>
-              ))}
-              {/* Conditionally render the "create new" option at the bottom */}
-              {isNewItem && (
-                <CommandItem
-                  key={searchQuery}
-                  value={searchQuery}
-                  onSelect={handleCreate}
-                  className="text-primary"
-                >
-                  ➕ Aggiungi nuova voce "{searchQuery}"
-                </CommandItem>
-              )}
-            </CommandGroup>
+            <ScrollArea className="h-60">
+              <CommandGroup>
+                {items.map((opt) => (
+                  <CommandItem
+                    key={opt}
+                    value={opt}
+                    onSelect={() => handleSelect(opt)}
+                  >
+                    {opt}
+                  </CommandItem>
+                ))}
+                {isNewItem && (
+                  <CommandItem
+                    key={searchQuery}
+                    value={searchQuery}
+                    onSelect={handleCreate}
+                    className="text-primary"
+                  >
+                    ➕ Aggiungi nuova voce "{searchQuery}"
+                  </CommandItem>
+                )}
+              </CommandGroup>
+            </ScrollArea>
           </Command>
         </PopoverContent>
       </Popover>
@@ -92,12 +93,16 @@ export function CreateCombobox({ label, value, onChange, options, placeholder })
 export function CreateMultiCombobox({ label, values = [], onChange, options, placeholder }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState(options);
-  const [searchQuery, setSearchQuery] = useState(""); // State to hold the input value
+  const [searchQuery, setSearchQuery] = useState("");
+  
 
-  // Check if the current search query can be a new item
   const isNewItem = searchQuery.length > 0 && !items.some(
     (item) => item.toLowerCase() === searchQuery.toLowerCase()
   );
+
+  useEffect(() => {
+    setItems(options);
+  }, [options]);
 
   const toggleValue = (val) => {
     if (values.includes(val)) {
@@ -105,7 +110,7 @@ export function CreateMultiCombobox({ label, values = [], onChange, options, pla
     } else {
       onChange([...values, val]);
     }
-    setSearchQuery(""); // Clear search on select
+    setSearchQuery("");
   };
 
   const handleCreate = () => {
@@ -113,8 +118,8 @@ export function CreateMultiCombobox({ label, values = [], onChange, options, pla
     if (!newItem) return;
 
     setItems((prev) => [...prev, newItem]);
-    onChange([...values, newItem]); // Add to selected values
-    setSearchQuery(""); // Clear search input
+    onChange([...values, newItem]);
+    setSearchQuery("");
   };
 
   const displayText = () => {
@@ -123,64 +128,69 @@ export function CreateMultiCombobox({ label, values = [], onChange, options, pla
     return `${values.slice(0, 2).join(", ")} +${values.length - 2} altri`;
   };
 
+  // Filter items based on search query
+  const filteredItems = items.filter(item => 
+    item.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <div className="flex flex-col gap-2">
       <Label>{label}</Label>
       <Popover open={open} onOpenChange={(isOpen) => {
         setOpen(isOpen);
-        if (!isOpen) setSearchQuery(""); // Reset search on close
+        if (!isOpen) setSearchQuery("");
       }}>
         <PopoverTrigger asChild>
-          <Button variant="outline" role="combobox" className="justify-between w-[300px]">
+          <Button variant="outline" role="combobox" className="justify-between w-full">
             <span className="truncate">{displayText()}</span>
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="p-0 w-[300px]">
-          <Command shouldFilter={true}>
+        <PopoverContent className="p-0 w-full" align="start">
+          <Command shouldFilter={false} className="overflow-hidden">
             <CommandInput
               placeholder={`Cerca o aggiungi ${label.toLowerCase()}...`}
               value={searchQuery}
               onValueChange={setSearchQuery}
             />
             <CommandEmpty>Nessun risultato.</CommandEmpty>
-            <CommandGroup>
-              {items.map((opt) => (
-                <CommandItem
-                  key={opt}
-                  value={opt}
-                  onSelect={() => toggleValue(opt)}
-                  onMouseDown={(e) => e.preventDefault()} // Prevents popover from closing on select
-                  className="cursor-pointer"
-                >
-                  <div className="flex items-center w-full">
-                    <input
-                      type="checkbox"
-                      checked={values.includes(opt)}
-                      readOnly
-                      className="mr-2 h-4 w-4"
-                    />
-                    <span>{opt}</span>
-                  </div>
-                </CommandItem>
-              ))}
-              {/* Conditionally render the "create new" option */}
-              {isNewItem && (
-                <CommandItem
-                  key={searchQuery}
-                  value={searchQuery}
-                  onSelect={handleCreate}
-                  onMouseDown={(e) => e.preventDefault()} // Prevents popover from closing
-                  className="text-primary cursor-pointer"
-                >
-                  ➕ Aggiungi nuova voce "{searchQuery}"
-                </CommandItem>
-              )}
-            </CommandGroup>
+            <ScrollArea className="overflow-scroll max-h-100">
+              <CommandGroup >
+                {filteredItems.map((opt) => (
+                  <CommandItem
+                    key={opt}
+                    value={opt}
+                    onSelect={() => toggleValue(opt)}
+                    onMouseDown={(e) => e.preventDefault()}
+                    className="cursor-pointer"
+                  >
+                    <div className="flex items-center w-full">
+                      <input
+                        type="checkbox"
+                        checked={values.includes(opt)}
+                        readOnly
+                        className="mr-2 h-4 w-4"
+                      />
+                      <span>{opt}</span>
+                    </div>
+                  </CommandItem>
+                ))}
+                {isNewItem && (
+                  <CommandItem
+                    key={searchQuery}
+                    value={searchQuery}
+                    onSelect={handleCreate}
+                    onMouseDown={(e) => e.preventDefault()}
+                    className="text-primary cursor-pointer"
+                  >
+                    ➕ Aggiungi nuova voce "{searchQuery}"
+                  </CommandItem>
+                )}
+              </CommandGroup>
+            </ScrollArea>
           </Command>
         </PopoverContent>
       </Popover>
       
-      {/* Show selected items as tags below the button */}
       {values.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-1">
           {values.map((val) => (
@@ -203,10 +213,15 @@ export function CreateMultiCombobox({ label, values = [], onChange, options, pla
   );
 }
 
-
-// Unchanged component
-export function Combobox({ label, value, onChange, options, placeholder }) {
+// Updated Combobox component
+export function Combobox({ label, value, onChange, options, placeholder, className }) {
   const [open, setOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredOptions = options.filter(opt =>
+    opt.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <div className="flex flex-col gap-2">
       <Label>{label}</Label>
@@ -215,29 +230,35 @@ export function Combobox({ label, value, onChange, options, placeholder }) {
           <Button
             variant="outline"
             role="combobox"
-            className="justify-between"
+            className="justify-between w-[300px]"
           >
             {value || placeholder}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="p-0 w-[300px]">
-          <Command>
-            <CommandInput placeholder={`Cerca ${label.toLowerCase()}...`} />
+        <PopoverContent className="p-0 w-[300px]" align="start">
+          <Command shouldFilter={false} className="overflow-hidden">
+            <CommandInput 
+              placeholder={`Cerca ${label.toLowerCase()}...`}
+              value={searchQuery}
+              onValueChange={setSearchQuery}
+            />
             <CommandEmpty>Nessun risultato.</CommandEmpty>
-            <CommandGroup>
-              {options.map((opt) => (
-                <CommandItem
-                  key={opt}
-                  value={opt}
-                  onSelect={() => {
-                    onChange(opt);
-                    setOpen(false);
-                  }}
-                >
-                  {opt}
-                </CommandItem>
-              ))}
-            </CommandGroup>
+            <ScrollArea className="h-60">
+              <CommandGroup>
+                {filteredOptions.map((opt) => (
+                  <CommandItem
+                    key={opt}
+                    value={opt}
+                    onSelect={() => {
+                      onChange(opt);
+                      setOpen(false);
+                    }}
+                  >
+                    {opt}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </ScrollArea>
           </Command>
         </PopoverContent>
       </Popover>
@@ -245,7 +266,7 @@ export function Combobox({ label, value, onChange, options, placeholder }) {
   );
 }
 
-// Unchanged component
+// Updated MultiCombobox component
 export function MultiCombobox({
   label,
   values = [],
@@ -254,6 +275,7 @@ export function MultiCombobox({
   placeholder,
 }) {
   const [open, setOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const toggleValue = (val) => {
     if (values.includes(val)) {
@@ -262,6 +284,10 @@ export function MultiCombobox({
       onChange([...values, val]);
     }
   };
+
+  const filteredOptions = options.filter(opt =>
+    opt.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const displayText = () => {
     if (values.length === 0) return placeholder;
@@ -278,34 +304,40 @@ export function MultiCombobox({
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            className="justify-between"
+            className="justify-between w-[300px]"
           >
             <span className="truncate">{displayText()}</span>
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="p-0 w-[300px]">
-          <Command>
-            <CommandInput placeholder={`Cerca ${label.toLowerCase()}...`} />
+        <PopoverContent className="p-0 w-[300px]" align="start">
+          <Command shouldFilter={false} className="overflow-hidden">
+            <CommandInput 
+              placeholder={`Cerca ${label.toLowerCase()}...`}
+              value={searchQuery}
+              onValueChange={setSearchQuery}
+            />
             <CommandEmpty>Nessun risultato.</CommandEmpty>
-            <CommandGroup>
-              {options.map((opt) => (
-                <CommandItem
-                  key={opt}
-                  value={opt}
-                  onSelect={() => toggleValue(opt)}
-                >
-                  <div className="flex items-center w-full">
-                    <input
-                      type="checkbox"
-                      checked={values.includes(opt)}
-                      readOnly
-                      className="mr-2"
-                    />
-                    <span>{opt}</span>
-                  </div>
-                </CommandItem>
-              ))}
-            </CommandGroup>
+            <ScrollArea className="h-60">
+              <CommandGroup>
+                {filteredOptions.map((opt) => (
+                  <CommandItem
+                    key={opt}
+                    value={opt}
+                    onSelect={() => toggleValue(opt)}
+                  >
+                    <div className="flex items-center w-full">
+                      <input
+                        type="checkbox"
+                        checked={values.includes(opt)}
+                        readOnly
+                        className="mr-2 h-4 w-4"
+                      />
+                      <span>{opt}</span>
+                    </div>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </ScrollArea>
           </Command>
         </PopoverContent>
       </Popover>
