@@ -149,7 +149,7 @@ export function PortalSideBar({
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
+        {/* <NavMain items={data.navMain} /> */}
        {/*  <NavDocuments items={data.documents} /> */}
         {/*   <NavSecondary items={data.navSecondary} className="mt-auto" /> */}
       </SidebarContent>

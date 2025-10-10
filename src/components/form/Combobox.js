@@ -41,7 +41,7 @@ export function CreateCombobox({ label, value, onChange, options, placeholder })
   };
 
   // Filter items based on search query
-  const filteredItems = items.filter(item => 
+  const filteredItems = items.filter(item =>
     item.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -58,7 +58,11 @@ export function CreateCombobox({ label, value, onChange, options, placeholder })
             role="combobox"
             className="justify-between w-full"
           >
-            {value || placeholder}
+            {value
+              ? value.length > 50
+                ? value.slice(0, 50) + "…"
+                : value
+              : placeholder}
           </Button>
         </PopoverTrigger>
         <PopoverPrimitive.Portal>
@@ -174,7 +178,7 @@ export function CreateMultiCombobox({ label, values = [], onChange, options, pla
               />
               <CommandEmpty>Nessun risultato.</CommandEmpty>
               <ScrollArea className={'[&>[data-radix-scroll-area-viewport]]:max-h-90'}>
-              <CommandGroup >
+                <CommandGroup >
                   {filteredItems.map((opt) => (
                     <CommandItem
                       key={opt}
@@ -205,8 +209,8 @@ export function CreateMultiCombobox({ label, values = [], onChange, options, pla
                       ➕ Aggiungi nuova voce "{searchQuery}"
                     </CommandItem>
                   )}
-              </CommandGroup>
-                  </ScrollArea>
+                </CommandGroup>
+              </ScrollArea>
             </Command>
           </PopoverPrimitive.Content>
         </PopoverPrimitive.Portal>
@@ -253,7 +257,11 @@ export function Combobox({ label, value, onChange, options, placeholder, classNa
             role="combobox"
             className="justify-between w-full"
           >
-            {value || placeholder}
+           {value
+              ? value.length > 50
+                ? value.slice(0, 50) + "…"
+                : value
+              : placeholder}
           </Button>
         </PopoverTrigger>
         <PopoverPrimitive.Portal>
@@ -318,7 +326,7 @@ export function MultiCombobox({
 
   const displayText = () => {
     if (values.length === 0) return placeholder;
-    if (values.length <= 3) return values.join(", ");
+    if (values.length < 3) return values.join(", ");
     return `${values.slice(0, 2).join(", ")} +${values.length - 2} altri`;
   };
 

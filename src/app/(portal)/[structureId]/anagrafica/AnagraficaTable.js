@@ -138,8 +138,8 @@ const columnsDef = [
         ? `${first} (+${extraCount})`
         : first;
       return (
-        <div className='bg-red-200 text-center shadow-gray-800/40 shadow-sm rounded-xs text-red-800'>
-          <p className='px-1'>{renderedCell}</p>
+        <div className='bg-red-500 text-center shadow-gray-800/40 rounded-sm text-background '>
+          <p className=''>{renderedCell}</p>
         </div>
       );
     },
@@ -250,7 +250,7 @@ export function AnagraficaTable({ rows, structureId }) {
           },
         }}
         muiTablePaperProps={{
-          sx: { borderRadius: 3 }
+          sx: { borderRadius: 3, border: '1px solid gray-300' }
         }}
         renderTopToolbarCustomActions={({ table }) => (
           <div className="flex flex-wrap gap-2 items-center">

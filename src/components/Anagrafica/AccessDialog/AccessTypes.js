@@ -125,3 +125,17 @@ export const AccessTypes = [
     ]
   }
 ]
+
+
+
+/*
+Presa in carico (il bisogno dell'utente è soddisfatto attraverso presa in carico specifica da parte di un operatore del CC) 
+Informativa (il bisogno dell'utente è soddisfatto fornendo informazioni e/o orientamento generale) 
+Supporto indiretto / Referral verso altri servizi (l'utente viene inviato verso uno specifico servizio del territorio adatto a rispondere al suo bisogno) 
+
+*/
+export const AccessClassifications = [
+  "Presa in carico (il bisogno dell'utente è soddisfatto attraverso presa in carico specifica da parte di un operatore del CC)",
+  "Informativa (il bisogno dell'utente è soddisfatto fornendo informazioni e/o orientamento generale)",
+  "Supporto indiretto / Referral verso altri servizi (l'utente viene inviato verso uno specifico servizio del territorio adatto a rispondere al suo bisogno)"
+];

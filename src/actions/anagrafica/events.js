@@ -3,7 +3,8 @@
 import { headers } from 'next/headers';
 import admin from '@/lib/firebase/firebaseAdmin';
 import { randomUUID } from 'crypto';
-
+import { create } from 'domain';
+import { stripHtml } from '@/utils/htmlSanitizer';
 /**
  * Helper: controlla se due array hanno intersezione
  */
@@ -32,11 +33,14 @@ export async function createEventAction(payload
     note = null,
     dataOra = null,
     files = [],
+    classificazione = null,
+    enteRiferimento = null,
+    structureId,
   } = payload;
 
   if (!anagraficaId || !tipoEvento) throw new Error('Missing required fields');
 
-  // 1) Recupera anagrafica
+  
   const anagraficaRef = adminDb.collection('anagrafica').doc(anagraficaId);
   const anagraficaSnap = await anagraficaRef.get();
   if (!anagraficaSnap.exists) throw new Error('Anagrafica not found');
@@ -44,7 +48,7 @@ export async function createEventAction(payload
   const anagraficaData = anagraficaSnap.data() || {};
   const allowedStructures = anagraficaData.canBeAccessedBy || anagraficaData.structureIds || [];
 
-  // 2) Recupera operatore
+  
   let operatorDoc = await adminDb.collection('operators').doc(userUid).get();
 /*   if (!operatorDoc.exists) {
     operatorDoc = await adminDb.collection('users').doc(userUid).get();
@@ -54,12 +58,15 @@ export async function createEventAction(payload
   const operatorData = operatorDoc.data() || {};
   const operatorStructures = operatorData.structureIds || operatorData.structureId || [];
 
-  // 3) Controllo accesso
+  
   if (!arraysIntersect(operatorStructures, allowedStructures)) {
     throw new Error('Forbidden: operator not allowed for this anagrafica');
   }
 
-  // 4) Upload diretto su Firebase Storage (senza file temporanei)
+  if (structureId && !allowedStructures.includes(structureId)) {
+    throw new Error('Forbidden: invalid structureId');
+  }
+  
   const eventId = randomUUID();
   const uploadedFiles = [];
 
@@ -78,26 +85,88 @@ export async function createEventAction(payload
       nome: a.name,
       tipo: a.type,
       dimensione: a.size,
-      path: storagePath, // solo path
+      path: storagePath, 
     });
   }
 
-  // 5) Salva evento su Firestore
+  
   const eventData = {
     anagraficaId,
     tipoEvento,
     sottocategorie,
     altro,
-    contenuto,
+    note,
     dataOra: dataOra || null,
     files: uploadedFiles,
     createdBy: userUid,
     createdByEmail: userEmail || null,
     structureIds: allowedStructures,
     createdAt: new Date().toISOString(),
+    classificazione,
+    enteRiferimento,
+    createdByStructure: structureId || null,
   };
 
   await adminDb.collection('eventi').doc(eventId).set(eventData);
 
   return { success: true, eventId, eventData };
+}
+
+
+
+export async function getEventsAction(anagraficaId) {
+  const hdr = await headers();
+  const userUid = hdr.get('x-user-uid');
+  const userEmail = hdr.get('x-user-email');
+  if (!userUid) throw new Error('Unauthorized');
+
+  if (!anagraficaId) throw new Error('Missing anagraficaId');
+
+  
+  const anagraficaRef = adminDb.collection('anagrafica').doc(anagraficaId);
+  const anagraficaSnap = await anagraficaRef.get();
+  if (!anagraficaSnap.exists) throw new Error('Anagrafica not found');
+
+  const anagraficaData = anagraficaSnap.data() || {};
+  const allowedStructures =
+    anagraficaData.canBeAccessedBy || anagraficaData.structureIds || [];
+
+  
+  let operatorDoc = await adminDb.collection('operators').doc(userUid).get();
+  if (!operatorDoc.exists) {
+    operatorDoc = await adminDb.collection('users').doc(userUid).get();
+  }
+  if (!operatorDoc.exists) throw new Error('Operator not found');
+
+  const operatorData = operatorDoc.data() || {};
+  const operatorStructures =
+    operatorData.structureIds || operatorData.structureId || [];
+
+  
+  if (!arraysIntersect(operatorStructures, allowedStructures)) {
+    throw new Error('Forbidden: operator not allowed for this anagrafica');
+  }
+
+  
+  const snap = await adminDb
+    .collection('eventi')
+    .where('anagraficaId', '==', anagraficaId)
+    .orderBy('createdAt', 'desc')
+    .get();
+
+  const eventi = [];
+  snap.forEach(doc => {
+    const data = doc.data();
+    eventi.push({
+      id: doc.id,
+      sanitizedNote : stripHtml(data.note || '' ),
+      ...data,
+    });
+  });
+
+  return {
+    success: true,
+    count: eventi.length,
+    eventi,
+  };
 }

@@ -13,15 +13,17 @@ import {
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Combobox, CreateMultiCombobox } from "@/components/form/Combobox";
-import { EventTypes } from "./EventTypes"; // Definisci i tipi di evento
+import { EventTypes } from "./EventTypes"; 
 import clsx from "clsx";
 import { TiptapEditor } from "@/components/tiptap-editor";
 import { Dropzone } from "@/components/ui/shadcn-io/dropzone";
-import { Calendar } from "@/components/ui/calendar"; // ShadCN calendar
+import { Calendar } from "@/components/ui/calendar"; 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { IconCalendarPlus } from "@tabler/icons-react";
 import { createEventAction } from "@/actions/anagrafica/events";
-export default function EventDialog({ anagraficaId }) {
+
+
+export default function EventDialog({ anagraficaId, structureId }) {
   const [open, setOpen] = useState(false);
   const [content, setContent] = useState("");
   const [selectedType, setSelectedType] = useState("");
@@ -29,7 +31,7 @@ export default function EventDialog({ anagraficaId }) {
   const [altroText, setAltroText] = useState("");
   const [files, setFiles] = useState([]);
 
-  const [dateTime, setDateTime] = useState(undefined); // data/ora opzionale
+  const [dateTime, setDateTime] = useState(undefined); 
 
   const currentType = EventTypes.find((t) => t.label === selectedType);
   const [subCategories, setSubCategories] = useState(
@@ -60,23 +62,22 @@ export default function EventDialog({ anagraficaId }) {
     if (!isFormValid) return;
 
     try {
-      // Prepara payload senza userUid
       const payload = {
-        anagraficaId, // assicurati di avere la variabile anagraficaId disponibile
+        anagraficaId, 
         tipoEvento: selectedType,
         sottocategorie: selectedSubcategories,
         altro: selectedSubcategories.includes("Altro") ? altroText.trim() : undefined,
         note: content,
-        files, // Server Action si occuperà dell'upload
+        files, 
         dataOra: dateTime?.toISOString() || undefined,
+        structureId,
       };
 
-      // Chiama la Server Action
+      
       const result = await createEventAction(payload);
 
-      console.log('Evento creato con successo:', result);
 
-      // Dopo il salvataggio, reset e chiusura dialog
+      
       setOpen(false);
       resetForm();
     } catch (error) {

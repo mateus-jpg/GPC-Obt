@@ -68,7 +68,6 @@ export const AuthProvider = ({ children }) => {
     return () => { mounted = false; };
   }, [fetchUserWithOperator]);
 
-  // Optional: sync client-side Firebase state
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       // Optionally rehydrate from Firebase token if needed

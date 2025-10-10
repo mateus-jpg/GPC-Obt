@@ -13,19 +13,23 @@ import {
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Combobox, CreateMultiCombobox } from "@/components/form/Combobox";
-import { AccessTypes } from "./AccessTypes";
+import { AccessClassifications, AccessTypes } from "./AccessTypes";
 import clsx from "clsx";
 import { TiptapEditor } from "@/components/tiptap-editor";
 import { Dropzone } from "@/components/ui/shadcn-io/dropzone"; // 👈 import della dropzone di shadcn
 import { IconDoorEnter } from "@tabler/icons-react";
 import { createAccessAction } from "@/actions/anagrafica/access"; // Server Action sicura
-export default function AccessDialog({ anagraficaId }) {
+
+export default function AccessDialog({ anagraficaId, structureId }) {
   const [open, setOpen] = useState(false);
   const [content, setContent] = useState("");
   const [selectedType, setSelectedType] = useState("");
   const [selectedSubcategories, setSelectedSubcategories] = useState([]);
   const [altroText, setAltroText] = useState("");
-  const [files, setFiles] = useState([]); // 👈 nuovi file caricati con la dropzone
+  const [files, setFiles] = useState([]); 
+  const [classification, setClassification] = useState("");
+  const [referralEntity, setReferralEntity] = useState("");
+
 
   // Calcola le sottocategorie basandoti sul tipo selezionato
   const currentType = AccessTypes.find((t) => t.label === selectedType);
@@ -62,7 +66,10 @@ export default function AccessDialog({ anagraficaId }) {
         sottoCategorie: selectedSubcategories,
         altro: selectedSubcategories.includes("Altro") ? altroText.trim() : undefined,
         note: content?.trim() || undefined,
+        classificazione: classification || undefined,
+        enteRiferimento: referralEntity || undefined,
         files, 
+        structureId, // struttura da cui viene registrato l'accesso
       };
       console.log(files)
       // Chiamata alla Server Action sicura
@@ -71,8 +78,8 @@ export default function AccessDialog({ anagraficaId }) {
       console.log('Accesso creato con successo:', result);
 
       // Reset e chiusura dialog
-      /* setOpen(false);
-      resetForm(); */
+      setOpen(false);
+      resetForm();
     } catch (error) {
       console.error('Errore durante la creazione dell’accesso:', error);
       alert('Si è verificato un errore durante la creazione dell’accesso.');
@@ -193,6 +200,26 @@ export default function AccessDialog({ anagraficaId }) {
                 ))}
               </ul>
             )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <Combobox
+                label="Classificazione Intervento"
+                value={classification}
+                onChange={(value) => setClassification(value || "")}
+                options={AccessClassifications}
+                placeholder="Seleziona la classificazione..."
+              />
+              <div className="flex flex-col gap-2">
+              <Label htmlFor="referralEntity">Ente di riferimento (per Referral)</Label>
+              <Input
+                label="Ente di riferimento"
+                value={referralEntity}
+                onChange={(e) => setReferralEntity(e.target.value || "")}
+                placeholder="Seleziona l'ente di riferimento..."
+                />
+                </div>
+              
+            </div>
           </div>
 
           <DialogFooter>

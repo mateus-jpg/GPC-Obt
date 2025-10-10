@@ -3,7 +3,7 @@
 import { headers } from 'next/headers';
 import admin from '@/lib/firebase/firebaseAdmin';
 import { randomUUID } from 'crypto';
-
+import { stripHtml } from '@/utils/htmlSanitizer';
 
 const adminDb = admin.firestore();
 const adminStorage = admin.storage();
@@ -25,15 +25,18 @@ export async function createAccessAction(payload) {
   const {
     anagraficaId,
     tipoAccesso,
-    sottocategorie = [],
+    sottoCategorie = [],
     altro = null,
     note = null,
     files = [],
+    classificazione = null,
+    enteRiferimento = null,
+    structureId,
   } = payload;
   console.log('createAccessAction payload:', payload);
   if (!anagraficaId || !tipoAccesso) throw new Error('Missing required fields');
-
-  // 1) Recupera anagrafica
+  
+  
   const anagraficaRef = adminDb.collection('anagrafica').doc(anagraficaId);
   const anagraficaSnap = await anagraficaRef.get();
   if (!anagraficaSnap.exists) throw new Error('Anagrafica not found');
@@ -41,7 +44,7 @@ export async function createAccessAction(payload) {
   const anagraficaData = anagraficaSnap.data() || {};
   const allowedStructures = anagraficaData.canBeAccessedBy || anagraficaData.structureIds || [];
 
-  // 2) Recupera operatore
+  
   let operatorDoc = await adminDb.collection('operators').doc(userUid).get();
   if (!operatorDoc.exists) {
     operatorDoc = await adminDb.collection('users').doc(userUid).get();
@@ -50,13 +53,16 @@ export async function createAccessAction(payload) {
 
   const operatorData = operatorDoc.data() || {};
   const operatorStructures = operatorData.structureIds || operatorData.structureId || [];
-
-  // 3) Controllo accesso
+  
+  
   if (!arraysIntersect(operatorStructures, allowedStructures)) {
     throw new Error('Forbidden: operator not allowed for this anagrafica');
   }
+  if(structureId && !allowedStructures.includes(structureId)) {
+    throw new Error('Forbidden: structureId not allowed for this anagrafica');
+  }
 
-  // 4) Upload diretto su Firebase Storage
+  
   const accessId = randomUUID();
   const uploadedFiles= [];
 
@@ -79,11 +85,12 @@ export async function createAccessAction(payload) {
     });
   }
 
-  // 5) Salva accesso su Firestore
+  
   const accessData = {
     anagraficaId,
     tipoAccesso,
-    sottocategorie,
+    sottoCategorie,
+    createdByStructure: structureId,
     altro,
     note,
     files: uploadedFiles,
@@ -91,9 +98,68 @@ export async function createAccessAction(payload) {
     createdByEmail: userEmail || null,
     structureIds: allowedStructures,
     createdAt: new Date().toISOString(),
+    classificazione,
+    enteRiferimento,
   };
 
   await adminDb.collection('accessi').doc(accessId).set(accessData);
 
   return { success: true, accessId, accessData };
+}
+
+export async function getAccessAction(anagraficaId) {
+  const hdr = await headers();
+  const userUid = hdr.get('x-user-uid');
+  const userEmail = hdr.get('x-user-email');
+  if (!userUid) throw new Error('Unauthorized');
+
+  if (!anagraficaId) throw new Error('Missing anagraficaId');
+
+  
+  const anagraficaRef = adminDb.collection('anagrafica').doc(anagraficaId);
+  const anagraficaSnap = await anagraficaRef.get();
+  if (!anagraficaSnap.exists) throw new Error('Anagrafica not found');
+
+  const anagraficaData = anagraficaSnap.data() || {};
+  const allowedStructures =
+    anagraficaData.canBeAccessedBy || anagraficaData.structureIds || [];
+
+  
+  let operatorDoc = await adminDb.collection('operators').doc(userUid).get();
+  if (!operatorDoc.exists) {
+    operatorDoc = await adminDb.collection('users').doc(userUid).get();
+  }
+  if (!operatorDoc.exists) throw new Error('Operator not found');
+
+  const operatorData = operatorDoc.data() || {};
+  const operatorStructures =
+    operatorData.structureIds || operatorData.structureId || [];
+
+  
+  if (!arraysIntersect(operatorStructures, allowedStructures)) {
+    throw new Error('Forbidden: operator not allowed for this anagrafica');
+  }
+
+  
+  const snap = await adminDb
+    .collection('accessi')
+    .where('anagraficaId', '==', anagraficaId)
+    .orderBy('createdAt', 'desc')
+    .get();
+
+  const accessi = [];
+  snap.forEach(doc => {
+    const data = doc.data();
+    accessi.push({
+      id: doc.id,
+      sanitizedNote : stripHtml(data.note || '' ),
+      ...data,
+    });
+  });
+
+  return {
+    success: true,
+    count: accessi.length,
+    accessi,
+  };
 }

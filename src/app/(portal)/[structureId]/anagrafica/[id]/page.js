@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardContent, } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Edit, PlusCircleIcon, UserRound } from "lucide-react";
+import { ArrowLeft, Edit, PencilIcon, PlusCircleIcon, UserRound } from "lucide-react";
 import Otherinfo from "@/components/Anagrafica/Otherinfo";
 import admin from "@/lib/firebase/firebaseAdmin";
 
@@ -12,6 +12,10 @@ import { Status, StatusIndicator, StatusLabel } from '@/components/ui/shadcn-io/
 import { Button } from "@/components/ui/button";
 import AccessDialog from "@/components/Anagrafica/AccessDialog/AccessDialog";
 import EventDialog from "@/components/Anagrafica/EventDialog/EventDialog";
+import { getAccessAction } from "@/actions/anagrafica/access";
+import AccessInfo from "@/components/Anagrafica/AccessInfo";
+import { getEventsAction } from "@/actions/anagrafica/events";
+import EventInfo from "@/components/Anagrafica/EventInfo";
 
 async function getAnagraficaData(id) {
   const headersList = await headers();
@@ -64,8 +68,14 @@ export default async function AnagraficaViewPage({ params }) {
   }
 
 
-  const anagrafica = await getAnagraficaData(id);
-
+  
+  const [anagraficaAccesses, anagraficaEvents, anagrafica] = await Promise.all([
+    getAccessAction(id),
+    getEventsAction(id),
+    getAnagraficaData(id)
+  ]);
+  console.log(anagraficaAccesses)
+  console.log(anagraficaEvents)
   if (!anagrafica) {
     return notFound();
   }
@@ -120,12 +130,19 @@ export default async function AnagraficaViewPage({ params }) {
         {/* 1. Informazioni Anagrafiche */}
         <Card className="lg:col-span-2 gap-2  ">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 justify-between">
               {/* <span className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
                   1
                 </span> */}
+                <div className="flex items-center gap-2 flex-row">
+
               <UserRound className="w-5 h-5" />
+
               Informazioni Generali
+                </div>
+              <Link href={`/${structureId}/anagrafica/${anagrafica.id}/edit`} className="border-1 border-gray-300 rounded-md p-1 transition-all hover:shadow-sm hover:bg-gray-300 flex items-center">
+              <PencilIcon className="w-6 h-6 text-gray-600 hover:text-gray-900" />
+              </Link>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-4">
@@ -159,14 +176,17 @@ export default async function AnagraficaViewPage({ params }) {
         </Link>
       </Button>
       <div className="flex gap-2">
-      <EventDialog anagraficaId={anagrafica.id} />
-      <AccessDialog anagraficaId={anagrafica.id} />
+      <EventDialog anagraficaId={anagrafica.id} structureId={structureId} />
+      <AccessDialog anagraficaId={anagrafica.id} structureId={structureId} />
       </div>
       </div>
       <Otherinfo anagrafica={anagrafica} />
-      {/* Metadata */}
-
-    </div>
+{anagraficaAccesses &&(
+  <>
+      <AccessInfo accesses={anagraficaAccesses.accessi} />
+      <EventInfo events={anagraficaEvents.eventi} />
+      </>)}   
+       </div>
 
   );
 }

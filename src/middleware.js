@@ -40,12 +40,12 @@ export async function middleware(req) {
     }
 
     const { user } = await verifyRes.json();
-    console.log(`✓ Session verified for ${pathname}, user: ${user.uid}`);
 
     // Pass user info to the page via request headers
     const requestHeaders = new Headers(req.headers);
     requestHeaders.set('x-user-uid', user.uid);
     requestHeaders.set('x-user-email', user.email || '');
+    
 
     return NextResponse.next({
         request: {
