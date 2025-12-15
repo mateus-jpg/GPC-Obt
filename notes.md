@@ -4,7 +4,7 @@
 
 TODO :
 - [x] Iscrizione Anagrafica
-- [ ] Pagina Anagrafica
+- [x] Pagina Anagrafica
 - [ ] Accessi 
 - [ ] Dashboard 
 - [ ] Altro
@@ -135,3 +135,58 @@ Registra Scadenze
 fields encryption create key that must be rotated 
 all the pages are rendere on the server 
 only id name and some others will be not be encrypted
+
+
+
+## 15/10 
+
+Nella tabella accessi 
+mettere prima colonna la data
+
+
+## Dashboard Per Struttura 
+
+## 5/11
+
+Nuovo accesso -> primo accesso
+
+
+### Primo accesso si aggunge la lista di documenti
+  poi sono caricati e si hanno dei flag per l'inserimento nelle aree
+ vedi sezione documenti 
+
+
+
+-> nuovi aggiornamenti dell'anagrafica
+
+** idea ** 
+Aggiornamento anagrafica + accesso, si calcola il miglioramento
+dallo stato attuale delle atre categoria + dagli ultimi n accessi della stessa categoria
+gestione degoi esempi -> vedi codice de chat console 
+
+Documento ocr (+ llm per categorizzazione)  con categoria e con scadenza
+
+##### Guarda con il sitema la roba della privacy con firma wacom
+
+
+prob l'accesso deve essere un'array di entrata 
+consiglio di rui mettere dei tab per i vari accessi 
+un'accesso viene salvato come un'array di sotto categorie 
+
+
+le sotto categorie vengono prese dalla struttara, ogni volta che avviene un'accesso si salva la sotto categoria
+
+comunicazione calendario con google calendar -> collegata per struttura 
+
+Appuntamento persola 
+
+
+### Sezione documenti 
+
+nice to have documenti con le date
+ 
+
+
+Homepage eventi 
+
+Appuntamenti/ documenti in scadenza/ 

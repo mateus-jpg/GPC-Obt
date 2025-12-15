@@ -47,11 +47,12 @@ async function canUserAccess(anagrafica, userID) {
   const userDoc = await userRef.get();
   const userData = userDoc.data();
   const userStructureIds = userData?.structureIds || [];
-  if (!anagrafica?.canBeAccessedBy || !userStructureIds) {
+  const canBeAccessedBy = anagrafica?.canBeAccessedBy;
+  if (!canBeAccessedBy || !userStructureIds) {
     return false;
   }
 
-  return anagrafica.canBeAccessedBy.some(id =>
+  return canBeAccessedBy.some(id =>
     userStructureIds.includes(id)
   );
 }
@@ -68,7 +69,7 @@ export default async function AnagraficaViewPage({ params }) {
   }
 
 
-  
+
   const [anagraficaAccesses, anagraficaEvents, anagrafica] = await Promise.all([
     getAccessAction(id),
     getEventsAction(id),
@@ -96,7 +97,7 @@ export default async function AnagraficaViewPage({ params }) {
             </p>
           </CardContent>
         </Card>
-      </div>  
+      </div>
     );
   }
 
@@ -108,13 +109,13 @@ export default async function AnagraficaViewPage({ params }) {
         <div className="flex items-center justify-between px-2">
           <div className="capitalize flex gap-6" >
             <h1 className="text-3xl font-bold flex items-center align-middle gap-2  text-gray-900">
-              {/*  <IconUser className="w-6 h-6" />  */}{anagrafica.nome} {anagrafica.cognome}
+              {/*  <IconUser className="w-6 h-6" />  */}{anagrafica.anagrafica?.nome} {anagrafica.anagrafica?.cognome}
             </h1>
-            {anagrafica.vulnerabilita?.length > 0 && (
-            <Status status="offline">
-              <StatusIndicator className="w-3 h-3" />
-              <h3 className="text-sm font-medium text-red-600">Presenti vulnerabilita</h3>
-            </Status>)}
+            {anagrafica.vulnerabilita?.vulnerabilita?.length > 0 && (
+              <Status status="offline">
+                <StatusIndicator className="w-3 h-3" />
+                <h3 className="text-sm font-medium text-red-600">Presenti vulnerabilita</h3>
+              </Status>)}
 
             {/*   <p className="text-gray-600 mt-1">
                 Scheda Anagrafica - ID: {id}
@@ -131,37 +132,37 @@ export default async function AnagraficaViewPage({ params }) {
         <Card className="lg:col-span-2 gap-2  ">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 justify-between">
-              {/* <span className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
-                  1
-                </span> */}
-                <div className="flex items-center gap-2 flex-row">
+              <span className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                1
+              </span>
+              <div className="flex items-center gap-2 flex-row">
 
-              <UserRound className="w-5 h-5" />
+                {/* <UserRound className="w-5 h-5" /> */}
 
-              Informazioni Generali
-                </div>
+                Informazioni Anagrafiche
+              </div>
               <Link href={`/${structureId}/anagrafica/${anagrafica.id}/edit`} className="border-1 border-gray-300 rounded-md p-1 transition-all hover:shadow-sm hover:bg-gray-300 flex items-center">
-              <PencilIcon className="w-6 h-6 text-gray-600 hover:text-gray-900" />
+                <PencilIcon className="w-6 h-6 text-gray-600 hover:text-gray-900" />
               </Link>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-4">
-            <DataRow label="Nome" value={anagrafica.nome} />
-            <DataRow label="Cognome" value={anagrafica.cognome} />
-            <DataRow label="Sesso" value={anagrafica.sesso} />
+            <DataRow label="Nome" value={anagrafica.anagrafica?.nome} />
+            <DataRow label="Cognome" value={anagrafica.anagrafica?.cognome} />
+            <DataRow label="Sesso" value={anagrafica.anagrafica?.sesso} />
             <DataRow
               label="Data di nascita"
-              value={anagrafica.dataDiNascita ? formatTimestamp(anagrafica.dataDiNascita) : '-'}
+              value={anagrafica.anagrafica?.dataDiNascita ? formatTimestamp(anagrafica.anagrafica.dataDiNascita) : '-'}
             />
-            <DataRow label="Luogo di nascita" value={anagrafica.luogoDiNascita} />
+            <DataRow label="Luogo di nascita" value={anagrafica.anagrafica?.luogoDiNascita} />
             <DataRow
               label="Cittadinanza"
-              value={anagrafica.cittadinanza?.join(', ') || '-'}
+              value={anagrafica.anagrafica?.cittadinanza?.join(', ') || '-'}
             />
-            <DataRow label="Comune di domicilio" value={anagrafica.comuneDiDomicilio} />
+            <DataRow label="Comune di domicilio" value={anagrafica.anagrafica?.comuneDiDomicilio} />
 
-            <DataRow label="Telefono" value={anagrafica.telefono} />
-            <DataRow label="Email" value={anagrafica.email} />
+            <DataRow label="Telefono" value={anagrafica.anagrafica?.telefono} />
+            <DataRow label="Email" value={anagrafica.anagrafica?.email} />
           </CardContent>
         </Card>
 
@@ -169,24 +170,24 @@ export default async function AnagraficaViewPage({ params }) {
       </div>
       <div className="flex justify-between items-center mt-4">
 
-      <Button variant="outline" asChild className="">
-        <Link href={`/${structureId}/anagrafica`}>
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Torna alla lista
-        </Link>
-      </Button>
-      <div className="flex gap-2">
-      <EventDialog anagraficaId={anagrafica.id} structureId={structureId} />
-      <AccessDialog anagraficaId={anagrafica.id} structureId={structureId} />
-      </div>
+        <Button variant="outline" asChild className="">
+          <Link href={`/${structureId}/anagrafica`}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Torna alla lista
+          </Link>
+        </Button>
+        <div className="flex gap-2">
+          <EventDialog anagraficaId={anagrafica.id} structureId={structureId} />
+          <AccessDialog anagraficaId={anagrafica.id} structureId={structureId} />
+        </div>
       </div>
       <Otherinfo anagrafica={anagrafica} />
-{anagraficaAccesses &&(
-  <>
-      <AccessInfo accesses={anagraficaAccesses.accessi} />
-      <EventInfo events={anagraficaEvents.eventi} />
-      </>)}   
-       </div>
+      {anagraficaAccesses && (
+        <>
+          <AccessInfo accesses={anagraficaAccesses.accessi} />
+          <EventInfo events={anagraficaEvents.eventi} />
+        </>)}
+    </div>
 
   );
 }
