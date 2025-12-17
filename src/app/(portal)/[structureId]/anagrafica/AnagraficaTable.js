@@ -32,136 +32,178 @@ const formatArrayField = (arr) => {
 
 const transformDataForExport = (data) => {
   return data.map(row => ({
-    nome: row.nome || '',
-    cognome: row.cognome || '',
-    nome_completo: `${row.nome || ''} ${row.cognome || ''}`.trim(),
-    sesso: row.sesso || '',
-    dataDiNascita: formatTimestamp(row.dataDiNascita),
-    luogoDiNascita: row.luogoDiNascita || '',
-    cittadinanza: formatArrayField(row.cittadinanza),
-    comuneDiDomicilio: row.comuneDiDomicilio || '',
-    telefono: row.telefono || '',
-    email: row.email || '',
-    nucleo: row.nucleo || '',
-    nucleoTipo: row.nucleoTipo || '',
-    figli: row.figli || '',
-    situazioneLegale: row.situazioneLegale || '',
-    situazioneAbitativa: formatArrayField(row.situazioneAbitativa),
-    situazioneLavorativa: row.situazioneLavorativa || '',
-    titoloDiStudioOrigine: row.titoloDiStudioOrigine || '',
-    titoloDiStudioItalia: row.titoloDiStudioItalia || '',
-    conoscenzaItaliano: row.conoscenzaItaliano || '',
-    vulnerabilita: formatArrayField(row.vulnerabilita),
-    intenzioneItalia: row.intenzioneItalia || '',
-    paeseDestinazione: row.paeseDestinazione || '',
-    referral: row.referral || '',
+    nome: row.anagrafica?.nome || '',
+    cognome: row.anagrafica?.cognome || '',
+    nome_completo: `${row.anagrafica?.nome || ''} ${row.anagrafica?.cognome || ''}`.trim(),
+    sesso: row.anagrafica?.sesso || '',
+    dataDiNascita: formatTimestamp(row.anagrafica?.dataDiNascita),
+    luogoDiNascita: row.anagrafica?.luogoDiNascita || '',
+    cittadinanza: formatArrayField(row.anagrafica?.cittadinanza),
+    comuneDiDomicilio: row.anagrafica?.comuneDiDomicilio || '',
+    telefono: row.anagrafica?.telefono || '',
+    email: row.anagrafica?.email || '',
+    nucleo: row.nucleoFamiliare?.nucleo || '',
+    nucleoTipo: row.nucleoFamiliare?.nucleoTipo || '',
+    figli: row.nucleoFamiliare?.figli || '',
+    situazioneLegale: row.legaleAbitativa?.situazioneLegale || '',
+    situazioneAbitativa: formatArrayField(row.legaleAbitativa?.situazioneAbitativa),
+    situazioneLavorativa: row.lavoroFormazione?.situazioneLavorativa || '',
+    titoloDiStudioOrigine: row.lavoroFormazione?.titoloDiStudioOrigine || '',
+    titoloDiStudioItalia: row.lavoroFormazione?.titoloDiStudioItalia || '',
+    conoscenzaItaliano: row.lavoroFormazione?.conoscenzaItaliano || '',
+    vulnerabilita: formatArrayField(row.vulnerabilita?.vulnerabilita),
+    intenzioneItalia: row.vulnerabilita?.intenzioneItalia || '',
+    paeseDestinazione: row.vulnerabilita?.paeseDestinazione || '',
+    referral: row.referral?.referral || '',
     createdAt: formatTimestamp(row.createdAt, true),
     updatedAt: formatTimestamp(row.updatedAt, true)
   }));
 };
 
 const columnsDef = [
-  { accessorKey: 'id', header: 'ID', enableHiding: true },
-  { accessorKey: 'nome', header: 'Nome (solo)', enableHiding: true },
-  { accessorKey: 'cognome', header: 'Cognome', enableHiding: true },
   {
-    accessorFn: (row) => `${row.nome || ''} ${row.cognome || ''}`.trim(),
-    id: 'nome_completo',
-    header: 'Nome',
-    size: 150,
-    enableHiding: false
+    id: 'metadata',
+    header: 'Metadata',
+    columns: [
+      { accessorKey: 'id', header: 'ID', enableHiding: true },
+      {
+        accessorKey: 'createdAt',
+        header: 'Creato il',
+        enableHiding: true,
+        Cell: ({ cell }) => formatTimestamp(cell.getValue(), true),
+        accessorFn: (row) => row.createdAt
+      },
+      {
+        accessorKey: 'updatedAt',
+        header: 'Aggiornato il',
+        enableHiding: true,
+        Cell: ({ cell }) => formatTimestamp(cell.getValue(), true),
+        accessorFn: (row) => row.updatedAt
+      },
+    ]
   },
-  { accessorKey: 'sesso', header: 'Sesso', size: 100 },
   {
-    accessorKey: 'dataDiNascita',
-    header: 'Data di nascita',
-    Cell: ({ cell }) => formatTimestamp(cell.getValue()),
-    accessorFn: (row) => row.dataDiNascita
-  },
-  { accessorKey: 'luogoDiNascita', header: 'Luogo di nascita' },
-  {
-    accessorKey: 'cittadinanza',
-    header: 'Cittadinanza',
-    Cell: ({ cell }) => {
-      const arr = cell.getValue() ?? [];
-      if (!Array.isArray(arr) || arr.length === 0) return '';
+    id: 'anagrafica',
+    header: 'Informazioni Anagrafiche',
+    columns: [
+      { accessorKey: 'anagrafica.nome', header: 'Nome (solo)', enableHiding: true },
+      { accessorKey: 'anagrafica.cognome', header: 'Cognome', enableHiding: true },
+      {
+        accessorFn: (row) => `${row.anagrafica?.nome || ''} ${row.anagrafica?.cognome || ''}`.trim(),
+        id: 'nome_completo',
+        header: 'Nome',
+        size: 150,
+        enableHiding: false
+      },
+      { accessorKey: 'anagrafica.sesso', header: 'Sesso', size: 100 },
+      {
+        accessorKey: 'anagrafica.dataDiNascita',
+        header: 'Data di nascita',
+        Cell: ({ cell }) => formatTimestamp(cell.getValue()),
+        accessorFn: (row) => row.anagrafica?.dataDiNascita
+      },
+      { accessorKey: 'anagrafica.luogoDiNascita', header: 'Luogo di nascita' },
+      {
+        accessorKey: 'anagrafica.cittadinanza',
+        header: 'Cittadinanza',
+        Cell: ({ cell }) => {
+          const arr = cell.getValue() ?? [];
+          if (!Array.isArray(arr) || arr.length === 0) return '';
 
-      const first = arr[0];
-      const extraCount = arr.length - 1;
-      const renderedCell = extraCount > 0
-        ? `${first} (+${extraCount})`
-        : first;
-      return (
+          const first = arr[0];
+          const extraCount = arr.length - 1;
+          const renderedCell = extraCount > 0
+            ? `${first} (+${extraCount})`
+            : first;
+          return (
 
-        <p className='px-1'>{renderedCell}</p>
-      );
-    },
-    accessorFn: (row) => row.cittadinanza
+            <p className='px-1'>{renderedCell}</p>
+          );
+        },
+        accessorFn: (row) => row.anagrafica?.cittadinanza
+      },
+      { accessorKey: 'anagrafica.comuneDiDomicilio', header: 'Comune di domicilio' },
+      { accessorKey: 'anagrafica.telefono', header: 'Telefono', size: 120 },
+      { accessorKey: 'anagrafica.email', header: 'Email', size: 200 },
+    ]
   },
-  { accessorKey: 'comuneDiDomicilio', header: 'Comune di domicilio' },
-  { accessorKey: 'telefono', header: 'Telefono', size: 120 },
-  { accessorKey: 'email', header: 'Email', size: 200 },
-  { accessorKey: 'nucleo', header: 'Nucleo familiare' },
-  { accessorKey: 'nucleoTipo', header: 'Tipo nucleo' },
-  { accessorKey: 'figli', header: 'Numero figli' },
-  { accessorKey: 'situazioneLegale', header: 'Situazione legale' },
   {
-    accessorKey: 'situazioneAbitativa',
-    header: 'Situazione abitativa',
-    Cell: ({ cell }) => {
-      const arr = cell.getValue() ?? [];
-      if (!Array.isArray(arr) || arr.length === 0) return '';
+    id: 'nucleo',
+    header: 'Nucleo Familiare',
+    columns: [
+      { accessorKey: 'nucleoFamiliare.nucleo', header: 'Nucleo familiare' },
+      { accessorKey: 'nucleoFamiliare.nucleoTipo', header: 'Tipo nucleo' },
+      { accessorKey: 'nucleoFamiliare.figli', header: 'Numero figli' },
+    ]
+  },
+  {
+    id: 'legale',
+    header: 'Situazione Legale e Abitativa',
+    columns: [
+      { accessorKey: 'legaleAbitativa.situazioneLegale', header: 'Situazione legale' },
+      {
+        accessorKey: 'legaleAbitativa.situazioneAbitativa',
+        header: 'Situazione abitativa',
+        Cell: ({ cell }) => {
+          const arr = cell.getValue() ?? [];
+          if (!Array.isArray(arr) || arr.length === 0) return '';
 
-      return (
-        <span title={arr.join(', ')}>
-          {arr[0]} {arr.length > 1 && `(+${arr.length - 1})`}
-        </span>
-      );
-    },
-    accessorFn: (row) => row.situazioneAbitativa
+          return (
+            <span title={arr.join(', ')}>
+              {arr[0]} {arr.length > 1 && `(+${arr.length - 1})`}
+            </span>
+          );
+        },
+        accessorFn: (row) => row.legaleAbitativa?.situazioneAbitativa
+      },
+    ]
   },
-  { accessorKey: 'situazioneLavorativa', header: 'Situazione lavorativa' },
-  { accessorKey: 'titoloDiStudioOrigine', header: 'Titolo di studio (origine)', enableHiding: true },
-  { accessorKey: 'titoloDiStudioItalia', header: 'Titolo di studio (Italia)', enableHiding: true },
-  { accessorKey: 'conoscenzaItaliano', header: 'Conoscenza Italiano' },
   {
-    accessorKey: 'vulnerabilita',
-    header: 'Vulnerabilità',
-    size: 180,
-    Cell: ({ cell }) => {
-      const arr = cell.getValue() ?? [];
-      if (!Array.isArray(arr) || arr.length === 0) return '';
+    id: 'lavoro',
+    header: 'Lavoro e Formazione',
+    columns: [
+      { accessorKey: 'lavoroFormazione.situazioneLavorativa', header: 'Situazione lavorativa' },
+      { accessorKey: 'lavoroFormazione.titoloDiStudioOrigine', header: 'Titolo di studio (origine)', enableHiding: true },
+      { accessorKey: 'lavoroFormazione.titoloDiStudioItalia', header: 'Titolo di studio (Italia)', enableHiding: true },
+      { accessorKey: 'lavoroFormazione.conoscenzaItaliano', header: 'Conoscenza Italiano' },
+    ]
+  },
+  {
+    id: 'vulnerabilita',
+    header: 'Vulnerabilità e Prospettive',
+    columns: [
+      {
+        accessorKey: 'vulnerabilita.vulnerabilita',
+        header: 'Vulnerabilità',
+        size: 180,
+        Cell: ({ cell }) => {
+          const arr = cell.getValue() ?? [];
+          if (!Array.isArray(arr) || arr.length === 0) return '';
 
-      const first = arr[0];
-      const extraCount = arr.length - 1;
-      const renderedCell = extraCount > 0
-        ? `${first} (+${extraCount})`
-        : first;
-      return (
-        <div className='bg-red-500 text-center shadow-gray-800/40 rounded-sm text-background '>
-          <p className=''>{renderedCell}</p>
-        </div>
-      );
-    },
-    accessorFn: (row) => row.vulnerabilita
-  },
-  { accessorKey: 'intenzioneItalia', header: 'Intenzione rimanere in Italia' },
-  { accessorKey: 'paeseDestinazione', header: 'Paese destinazione' },
-  { accessorKey: 'referral', header: 'Referral' },
-  {
-    accessorKey: 'createdAt',
-    header: 'Creato il',
-    enableHiding: true,
-    Cell: ({ cell }) => formatTimestamp(cell.getValue(), true),
-    accessorFn: (row) => row.createdAt
+          const first = arr[0];
+          const extraCount = arr.length - 1;
+          const renderedCell = extraCount > 0
+            ? `${first} (+${extraCount})`
+            : first;
+          return (
+            <div className='bg-red-500 text-center shadow-gray-800/40 rounded-sm text-background '>
+              <p className=''>{renderedCell}</p>
+            </div>
+          );
+        },
+        accessorFn: (row) => row.vulnerabilita?.vulnerabilita
+      },
+      { accessorKey: 'vulnerabilita.intenzioneItalia', header: 'Intenzione rimanere in Italia' },
+      { accessorKey: 'vulnerabilita.paeseDestinazione', header: 'Paese destinazione' },
+    ]
   },
   {
-    accessorKey: 'updatedAt',
-    header: 'Aggiornato il',
-    enableHiding: true,
-    Cell: ({ cell }) => formatTimestamp(cell.getValue(), true),
-    accessorFn: (row) => row.updatedAt
-  },
+    id: 'referral',
+    header: 'Referral',
+    columns: [
+      { accessorKey: 'referral.referral', header: 'Referral' },
+    ]
+  }
 ];
 
 export function AnagraficaTable({ rows, structureId }) {
@@ -175,11 +217,11 @@ export function AnagraficaTable({ rows, structureId }) {
     return rows.filter((row) => {
 
       return (
-        (row.nome && row.nome.toLowerCase().includes(searchTerm)) ||
-        (row.cognome && row.cognome.toLowerCase().includes(searchTerm)) ||
-        (row.email && row.email.toLowerCase().includes(searchTerm)) ||
-        (row.telefono && row.telefono.toLowerCase().includes(searchTerm)) ||
-        (row.comuneDiDomicilio && row.comuneDiDomicilio.toLowerCase().includes(searchTerm))
+        (row.anagrafica?.nome && row.anagrafica.nome.toLowerCase().includes(searchTerm)) ||
+        (row.anagrafica?.cognome && row.anagrafica.cognome.toLowerCase().includes(searchTerm)) ||
+        (row.anagrafica?.email && row.anagrafica.email.toLowerCase().includes(searchTerm)) ||
+        (row.anagrafica?.telefono && row.anagrafica.telefono.toLowerCase().includes(searchTerm)) ||
+        (row.anagrafica?.comuneDiDomicilio && row.anagrafica.comuneDiDomicilio.toLowerCase().includes(searchTerm))
       );
     });
   }, [rows, globalFilter]);
@@ -224,15 +266,15 @@ export function AnagraficaTable({ rows, structureId }) {
           showAlertBanner: filteredRows.length === 0,
         }}
         displayColumnDefOptions={<> </>}
-        
+
         renderRowActions={({ row }) => (
           <div className="flex gap-2 flex-row justify-around items-center ">
-          <Link
-            href={`/${structureId}/anagrafica/${row.original.id}`}
-          >
-            <View  className="size-4" />
-          </Link>
-          <HousePlus className="size-4" />
+            <Link
+              href={`/${structureId}/anagrafica/${row.original.id}`}
+            >
+              <View className="size-4" />
+            </Link>
+            <HousePlus className="size-4" />
           </div>
         )}
         initialState={{
@@ -240,11 +282,11 @@ export function AnagraficaTable({ rows, structureId }) {
           density: 'compact',
           columnVisibility: {
             id: false,
-            nome: false,
-            cognome: false,
-            intenzioneItalia: false,
-            titoloDiStudioOrigine: false,
-            titoloDiStudioItalia: false,
+            'anagrafica.nome': false,
+            'anagrafica.cognome': false,
+            'vulnerabilita.intenzioneItalia': false,
+            'lavoroFormazione.titoloDiStudioOrigine': false,
+            'lavoroFormazione.titoloDiStudioItalia': false,
             createdAt: false,
             updatedAt: false,
           },

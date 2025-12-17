@@ -25,29 +25,41 @@ export default function EditAnagraficaPage() {
   const [error, setError] = useState(null);
 
   const [formData, setFormData] = useState({
-    cognome: "",
-    nome: "",
-    sesso: "",
-    dataDiNascita: undefined,
-    luogoDiNascita: "",
-    cittadinanza: [],
-    comuneDiDomicilio: "",
-    telefono: "",
-    email: "",
-    nucleo: "singolo",
-    nucleoTipo: "",
-    figli: 0,
-    situazioneLegale: "",
-    situazioneAbitativa: [],
-    situazioneLavorativa: "",
-    titoloDiStudioOrigine: "",
-    titoloDiStudioItalia: "",
-    conoscenzaItaliano: "",
-    vulnerabilita: [],
-    intenzioneItalia: "",
-    paeseDestinazione: "",
-    referral: "",
-    referralAltro: "",
+    anagrafica: {
+      cognome: "",
+      nome: "",
+      sesso: "",
+      dataDiNascita: undefined,
+      luogoDiNascita: "",
+      cittadinanza: [],
+      comuneDiDomicilio: "",
+      telefono: "",
+      email: "",
+    },
+    nucleoFamiliare: {
+      nucleo: "singolo",
+      nucleoTipo: "",
+      figli: 0,
+    },
+    legaleAbitativa: {
+      situazioneLegale: "",
+      situazioneAbitativa: [],
+    },
+    lavoroFormazione: {
+      situazioneLavorativa: "",
+      titoloDiStudioOrigine: "",
+      titoloDiStudioItalia: "",
+      conoscenzaItaliano: "",
+    },
+    vulnerabilita: {
+      vulnerabilita: [],
+      intenzioneItalia: "",
+      paeseDestinazione: "",
+    },
+    referral: {
+      referral: "",
+      referralAltro: "",
+    },
     canBeAccessedBy: [],
   });
 
@@ -59,35 +71,48 @@ export default function EditAnagraficaPage() {
         const dataStr = await getAnagrafica(id);
         const data = JSON.parse(dataStr);
         console.log("Fetched anagrafica data:", data);
-        // Convert Firebase timestamp to Date object for DatePicker
-        const dataDiNascita = data.dataDiNascita?._seconds 
-          ? new Date(data.dataDiNascita._seconds * 1000)
+
+        // Handle date conversion
+        const dataDiNascita = data.anagrafica?.dataDiNascita?._seconds
+          ? new Date(data.anagrafica.dataDiNascita._seconds * 1000)
           : undefined;
 
         setFormData({
-          cognome: data.cognome || "",
-          nome: data.nome || "",
-          sesso: data.sesso || "",
-          dataDiNascita,
-          luogoDiNascita: data.luogoDiNascita || "",
-          cittadinanza: data.cittadinanza || [],
-          comuneDiDomicilio: data.comuneDiDomicilio || "",
-          telefono: data.telefono || "",
-          email: data.email || "",
-          nucleo: data.nucleo || "singolo",
-          nucleoTipo: data.nucleoTipo || "",
-          figli: data.figli || 0,
-          situazioneLegale: data.situazioneLegale || "",
-          situazioneAbitativa: data.situazioneAbitativa || [],
-          situazioneLavorativa: data.situazioneLavorativa || "",
-          titoloDiStudioOrigine: data.titoloDiStudioOrigine || "",
-          titoloDiStudioItalia: data.titoloDiStudioItalia || "",
-          conoscenzaItaliano: data.conoscenzaItaliano || "",
-          vulnerabilita: data.vulnerabilita || [],
-          intenzioneItalia: data.intenzioneItalia || "",
-          paeseDestinazione: data.paeseDestinazione || "",
-          referral: data.referral || "",
-          referralAltro: "",
+          anagrafica: {
+            cognome: data.anagrafica?.cognome || "",
+            nome: data.anagrafica?.nome || "",
+            sesso: data.anagrafica?.sesso || "",
+            dataDiNascita,
+            luogoDiNascita: data.anagrafica?.luogoDiNascita || "",
+            cittadinanza: data.anagrafica?.cittadinanza || [],
+            comuneDiDomicilio: data.anagrafica?.comuneDiDomicilio || "",
+            telefono: data.anagrafica?.telefono || "",
+            email: data.anagrafica?.email || "",
+          },
+          nucleoFamiliare: {
+            nucleo: data.nucleoFamiliare?.nucleo || "singolo",
+            nucleoTipo: data.nucleoFamiliare?.nucleoTipo || "",
+            figli: data.nucleoFamiliare?.figli || 0,
+          },
+          legaleAbitativa: {
+            situazioneLegale: data.legaleAbitativa?.situazioneLegale || "",
+            situazioneAbitativa: data.legaleAbitativa?.situazioneAbitativa || [],
+          },
+          lavoroFormazione: {
+            situazioneLavorativa: data.lavoroFormazione?.situazioneLavorativa || "",
+            titoloDiStudioOrigine: data.lavoroFormazione?.titoloDiStudioOrigine || "",
+            titoloDiStudioItalia: data.lavoroFormazione?.titoloDiStudioItalia || "",
+            conoscenzaItaliano: data.lavoroFormazione?.conoscenzaItaliano || "",
+          },
+          vulnerabilita: {
+            vulnerabilita: data.vulnerabilita?.vulnerabilita || [],
+            intenzioneItalia: data.vulnerabilita?.intenzioneItalia || "",
+            paeseDestinazione: data.vulnerabilita?.paeseDestinazione || "",
+          },
+          referral: {
+            referral: data.referral?.referral || "",
+            referralAltro: "", // Usually not stored directly if normalized
+          },
           canBeAccessedBy: data.canBeAccessedBy || [],
         });
       } catch (err) {
@@ -103,13 +128,19 @@ export default function EditAnagraficaPage() {
     }
   }, [id]);
 
-  const handleChange = (field, value) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+  const handleChange = (group, field, value) => {
+    setFormData((prev) => ({
+      ...prev,
+      [group]: {
+        ...prev[group],
+        [field]: value,
+      },
+    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     try {
       setIsSaving(true);
 
@@ -118,12 +149,24 @@ export default function EditAnagraficaPage() {
       };
 
       // Handle referral
-      if (payload.referral === "Altro" || payload.referral === "Ente partner") {
-        if (payload.referralAltro?.trim()) {
-          payload.referral = payload.referralAltro.trim();
-        }
+      let finalReferral = payload.referral.referral;
+      if ((finalReferral === "Altro" || finalReferral === "Ente partner") && payload.referral.referralAltro?.trim()) {
+        finalReferral = payload.referral.referralAltro.trim();
       }
-      delete payload.referralAltro;
+
+      // Update payload.referral object
+      payload.referral = {
+        ...payload.referral,
+        referral: finalReferral
+      };
+      // We don't delete referralAltro from the object if we want to keep the state clean, 
+      // but for sending to DB we might want to remove it. 
+      // However, since we are sending the whole object, and referralAltro is in the state...
+      // Actually, let's just update the referral field.
+      // The API/DB expects referral object to have 'referral' field.
+      // referralAltro is not in the schema I defined for API, but for update it might be fine.
+      // Let's remove it to be clean.
+      delete payload.referral.referralAltro;
 
       // Use server action to update
       await updateAnagrafica(id, payload, structureId);
@@ -180,7 +223,7 @@ export default function EditAnagraficaPage() {
             </h1>
             <div className="flex flex-col">
               <p className="px-4 text-gray-600 text-xl border rounded-md">
-                {formData.nome} {formData.cognome}
+                {formData.anagrafica.nome} {formData.anagrafica.cognome}
               </p>
             </div>
           </div>
@@ -207,64 +250,64 @@ export default function EditAnagraficaPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="cognome">Cognome *</Label>
-                  <Input 
-                    id="cognome" 
-                    value={formData.cognome} 
-                    onChange={(e) => handleChange("cognome", e.target.value)} 
-                    placeholder="Inserisci cognome" 
-                    required 
+                  <Input
+                    id="cognome"
+                    value={formData.anagrafica.cognome}
+                    onChange={(e) => handleChange("anagrafica", "cognome", e.target.value)}
+                    placeholder="Inserisci cognome"
+                    required
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="nome">Nome *</Label>
-                  <Input 
-                    id="nome" 
-                    value={formData.nome} 
-                    onChange={(e) => handleChange("nome", e.target.value)} 
-                    placeholder="Inserisci nome" 
-                    required 
+                  <Input
+                    id="nome"
+                    value={formData.anagrafica.nome}
+                    onChange={(e) => handleChange("anagrafica", "nome", e.target.value)}
+                    placeholder="Inserisci nome"
+                    required
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <CreateCombobox 
-                  label="Sesso *" 
-                  value={formData.sesso} 
-                  onChange={(v) => handleChange("sesso", v)} 
-                  options={["Maschio", "Femmina", "Transessuale", "Altro"]} 
-                  placeholder="Seleziona sesso" 
+                <CreateCombobox
+                  label="Sesso *"
+                  value={formData.anagrafica.sesso}
+                  onChange={(v) => handleChange("anagrafica", "sesso", v)}
+                  options={["Maschio", "Femmina", "Transessuale", "Altro"]}
+                  placeholder="Seleziona sesso"
                 />
-                <DatePicker 
-                  label="Data di nascita" 
-                  required={true} 
-                  value={formData.dataDiNascita} 
-                  onChange={(date) => handleChange("dataDiNascita", date)} 
+                <DatePicker
+                  label="Data di nascita"
+                  required={true}
+                  value={formData.anagrafica.dataDiNascita}
+                  onChange={(date) => handleChange("anagrafica", "dataDiNascita", date)}
                 />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <CreateMultiCombobox 
-                  label="Paese di provenienza / Cittadinanza *" 
-                  values={formData.cittadinanza} 
-                  onChange={(val) => handleChange("cittadinanza", val)} 
-                  options={Countries.map(c => c.name)} 
-                  placeholder="Seleziona uno o più paesi" 
+                <CreateMultiCombobox
+                  label="Paese di provenienza / Cittadinanza *"
+                  values={formData.anagrafica.cittadinanza}
+                  onChange={(val) => handleChange("anagrafica", "cittadinanza", val)}
+                  options={Countries.map(c => c.name)}
+                  placeholder="Seleziona uno o più paesi"
                 />
-                <CreateCombobox 
-                  label="Luogo di nascita *" 
-                  value={formData.luogoDiNascita} 
-                  onChange={(val) => handleChange("luogoDiNascita", val)} 
-                  options={Countries.map(c => c.name)} 
-                  placeholder="Seleziona paese" 
+                <CreateCombobox
+                  label="Luogo di nascita *"
+                  value={formData.anagrafica.luogoDiNascita}
+                  onChange={(val) => handleChange("anagrafica", "luogoDiNascita", val)}
+                  options={Countries.map(c => c.name)}
+                  placeholder="Seleziona paese"
                 />
                 <div className="space-y-2">
                   <Label htmlFor="comuneDiDomicilio">Comune di domicilio</Label>
-                  <Input 
-                    id="comuneDiDomicilio" 
-                    value={formData.comuneDiDomicilio} 
-                    onChange={(e) => handleChange("comuneDiDomicilio", e.target.value)} 
-                    placeholder="Es. Verona" 
+                  <Input
+                    id="comuneDiDomicilio"
+                    value={formData.anagrafica.comuneDiDomicilio}
+                    onChange={(e) => handleChange("anagrafica", "comuneDiDomicilio", e.target.value)}
+                    placeholder="Es. Verona"
                   />
                 </div>
               </div>
@@ -274,21 +317,21 @@ export default function EditAnagraficaPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="telefono">Numero di cellulare</Label>
-                  <Input 
-                    id="telefono" 
-                    value={formData.telefono} 
-                    onChange={(e) => handleChange("telefono", e.target.value)} 
-                    placeholder="+39 123 456789" 
+                  <Input
+                    id="telefono"
+                    value={formData.anagrafica.telefono}
+                    onChange={(e) => handleChange("anagrafica", "telefono", e.target.value)}
+                    placeholder="+39 123 456789"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
-                  <Input 
-                    id="email" 
-                    type="email" 
-                    value={formData.email} 
-                    onChange={(e) => handleChange("email", e.target.value)} 
-                    placeholder="utente@esempio.com" 
+                  <Input
+                    id="email"
+                    type="email"
+                    value={formData.anagrafica.email}
+                    onChange={(e) => handleChange("anagrafica", "email", e.target.value)}
+                    placeholder="utente@esempio.com"
                   />
                 </div>
               </div>
@@ -309,9 +352,9 @@ export default function EditAnagraficaPage() {
               <div className="space-y-4">
                 <div>
                   <Label className="text-sm font-medium mb-3 block">Composizione del nucleo familiare *</Label>
-                  <RadioGroup 
-                    onValueChange={(v) => handleChange("nucleo", v)} 
-                    value={formData.nucleo} 
+                  <RadioGroup
+                    onValueChange={(v) => handleChange("nucleoFamiliare", "nucleo", v)}
+                    value={formData.nucleoFamiliare.nucleo}
                     className="space-y-2"
                   >
                     <div className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50">
@@ -330,26 +373,26 @@ export default function EditAnagraficaPage() {
                     </div>
                   </RadioGroup>
                 </div>
-                {formData.nucleo === "famiglia" && (
+                {formData.nucleoFamiliare.nucleo === "famiglia" && (
                   <div className="mt-4 p-4 bg-gray-50 rounded-lg border-l-4 border-green-500">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <CreateCombobox 
-                        label="Tipologia nucleo familiare" 
-                        value={formData.nucleoTipo} 
-                        onChange={(v) => handleChange("nucleoTipo", v)} 
-                        options={["Donna sola con minori", "Uomo solo con minori", "Coppia senza figli", "Coppia con figli", "Altro"]} 
-                        placeholder="Seleziona tipologia" 
+                      <CreateCombobox
+                        label="Tipologia nucleo familiare"
+                        value={formData.nucleoFamiliare.nucleoTipo}
+                        onChange={(v) => handleChange("nucleoFamiliare", "nucleoTipo", v)}
+                        options={["Donna sola con minori", "Uomo solo con minori", "Coppia senza figli", "Coppia con figli", "Altro"]}
+                        placeholder="Seleziona tipologia"
                       />
                       <div className="space-y-2">
                         <Label htmlFor="figli">Numero figli minori</Label>
-                        <Input 
-                          id="figli" 
-                          type="number" 
-                          min="0" 
-                          max="10" 
-                          value={formData.figli} 
-                          onChange={(e) => handleChange("figli", parseInt(e.target.value) || 0)} 
-                          placeholder="0" 
+                        <Input
+                          id="figli"
+                          type="number"
+                          min="0"
+                          max="10"
+                          value={formData.nucleoFamiliare.figli}
+                          onChange={(e) => handleChange("nucleoFamiliare", "figli", parseInt(e.target.value) || 0)}
+                          placeholder="0"
                         />
                       </div>
                     </div>
@@ -373,8 +416,8 @@ export default function EditAnagraficaPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <CreateCombobox
                   label="Situazione legale *"
-                  value={formData.situazioneLegale}
-                  onChange={(v) => handleChange("situazioneLegale", v)}
+                  value={formData.legaleAbitativa.situazioneLegale}
+                  onChange={(v) => handleChange("legaleAbitativa", "situazioneLegale", v)}
                   options={[
                     "In movimento/Irregolare sul territorio",
                     "Non ancora richiedente asilo, ma manifesta la volontà",
@@ -403,11 +446,11 @@ export default function EditAnagraficaPage() {
                   ]}
                   placeholder="Seleziona stato legale"
                 />
-                
+
                 <CreateMultiCombobox
                   label="Situazione abitativa * (risposte multiple)"
-                  values={formData.situazioneAbitativa}
-                  onChange={(val) => handleChange("situazioneAbitativa", val)}
+                  values={formData.legaleAbitativa.situazioneAbitativa}
+                  onChange={(val) => handleChange("legaleAbitativa", "situazioneAbitativa", val)}
                   options={[
                     "Senza fissa dimora",
                     "Senza dimora ma con dichiarazione di ospitalità",
@@ -450,8 +493,8 @@ export default function EditAnagraficaPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <CreateCombobox
                   label="Situazione lavorativa *"
-                  value={formData.situazioneLavorativa}
-                  onChange={(v) => handleChange("situazioneLavorativa", v)}
+                  value={formData.lavoroFormazione.situazioneLavorativa}
+                  onChange={(v) => handleChange("lavoroFormazione", "situazioneLavorativa", v)}
                   options={[
                     "Disoccupato/a",
                     "Dipendente con contratto a tempo indeterminato",
@@ -470,25 +513,25 @@ export default function EditAnagraficaPage() {
                   ]}
                   placeholder="Seleziona situazione lavorativa"
                 />
-                
+
                 <CreateCombobox
                   label="Titolo di studio nel paese di origine *"
-                  value={formData.titoloDiStudioOrigine}
-                  onChange={(v) => handleChange("titoloDiStudioOrigine", v)}
+                  value={formData.lavoroFormazione.titoloDiStudioOrigine}
+                  onChange={(v) => handleChange("lavoroFormazione", "titoloDiStudioOrigine", v)}
                   options={["Nessuno", "Elementare", "Licenza media", "Diploma scuola superiore", "Università", "Non dichiarato", "Altro"]}
                   placeholder="Seleziona titolo di studio"
                 />
                 <CreateCombobox
                   label="Titolo di studio riconosciuto in Italia *"
-                  value={formData.titoloDiStudioItalia}
-                  onChange={(v) => handleChange("titoloDiStudioItalia", v)}
+                  value={formData.lavoroFormazione.titoloDiStudioItalia}
+                  onChange={(v) => handleChange("lavoroFormazione", "titoloDiStudioItalia", v)}
                   options={["Nessun titolo", "Licenza media in Italia", "Diploma di scuola superiore in Italia", "Università in Italia", "Non dichiarato", "Altro"]}
                   placeholder="Seleziona titolo di studio"
                 />
                 <CreateCombobox
                   label="Grado di conoscenza dell'italiano (emerso dal colloquio) *"
-                  value={formData.conoscenzaItaliano}
-                  onChange={(v) => handleChange("conoscenzaItaliano", v)}
+                  value={formData.lavoroFormazione.conoscenzaItaliano}
+                  onChange={(v) => handleChange("lavoroFormazione", "conoscenzaItaliano", v)}
                   options={["La persona non parla italiano", "Base", "Intermedio", "Avanzato", "Madrelingua", "Altro"]}
                   placeholder="Seleziona livello di italiano"
                 />
@@ -510,8 +553,8 @@ export default function EditAnagraficaPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <CreateMultiCombobox
                   label="Vulnerabilità del singolo o di uno dei membri del nucleo *"
-                  values={formData.vulnerabilita}
-                  onChange={(v) => handleChange("vulnerabilita", v)}
+                  values={formData.vulnerabilita.vulnerabilita}
+                  onChange={(v) => handleChange("vulnerabilita", "vulnerabilita", v)}
                   options={[
                     "Nessuna vulnerabilità emersa",
                     "Minore non accompagnato",
@@ -530,9 +573,9 @@ export default function EditAnagraficaPage() {
                 <div className="space-y-4">
                   <div className="space-y-4">
                     <Label>Ha intenzione di fermarsi in Italia? *</Label>
-                    <RadioGroup 
-                      onValueChange={(v) => handleChange("intenzioneItalia", v)} 
-                      value={formData.intenzioneItalia} 
+                    <RadioGroup
+                      onValueChange={(v) => handleChange("vulnerabilita", "intenzioneItalia", v)}
+                      value={formData.vulnerabilita.intenzioneItalia}
                       className="flex gap-6"
                     >
                       <div className="flex items-center space-x-2">
@@ -545,14 +588,14 @@ export default function EditAnagraficaPage() {
                       </div>
                     </RadioGroup>
                   </div>
-                  {formData.intenzioneItalia === "NO" && (
+                  {formData.vulnerabilita.intenzioneItalia === "NO" && (
                     <div className="space-y-2">
                       <Label htmlFor="paeseDestinazione">Dove ha intenzione di proseguire il viaggio?</Label>
-                      <Input 
-                        id="paeseDestinazione" 
-                        value={formData.paeseDestinazione} 
-                        onChange={(e) => handleChange("paeseDestinazione", e.target.value)} 
-                        placeholder="Inserisci il paese di destinazione" 
+                      <Input
+                        id="paeseDestinazione"
+                        value={formData.vulnerabilita.paeseDestinazione}
+                        onChange={(e) => handleChange("vulnerabilita", "paeseDestinazione", e.target.value)}
+                        placeholder="Inserisci il paese di destinazione"
                       />
                     </div>
                   )}
@@ -574,19 +617,19 @@ export default function EditAnagraficaPage() {
             <CardContent className="pt-2 space-y-6">
               <CreateCombobox
                 label="Come hai conosciuto il Community Center? *"
-                value={formData.referral}
-                onChange={(v) => handleChange("referral", v)}
+                value={formData.referral.referral}
+                onChange={(v) => handleChange("referral", "referral", v)}
                 options={["Comune di Verona", "Volontari fuori questura", "CESAIM", "Ente partner", "Social Media/Sito web", "Passaparola", "Altro"]}
                 placeholder="Seleziona come ci hai conosciuto"
               />
-              {(formData.referral === "Ente partner" || formData.referral === "Altro") && (
+              {(formData.referral.referral === "Ente partner" || formData.referral.referral === "Altro") && (
                 <div className="space-y-2">
                   <Label htmlFor="referralAltro">Specifica</Label>
-                  <Input 
-                    id="referralAltro" 
-                    placeholder="Inserisci dettagli specifici" 
-                    value={formData.referralAltro} 
-                    onChange={(e) => handleChange("referralAltro", e.target.value)} 
+                  <Input
+                    id="referralAltro"
+                    placeholder="Inserisci dettagli specifici"
+                    value={formData.referral.referralAltro}
+                    onChange={(e) => handleChange("referral", "referralAltro", e.target.value)}
                   />
                 </div>
               )}
@@ -601,9 +644,9 @@ export default function EditAnagraficaPage() {
                 Annulla
               </Link>
             </Button>
-            <Button 
-              type="submit" 
-              size="lg" 
+            <Button
+              type="submit"
+              size="lg"
               disabled={isSaving}
               className="min-w-[200px] h-12 text-base font-medium"
             >

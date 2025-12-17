@@ -47,7 +47,7 @@ env:
       - RUNTIME
 
   - variable: SESSION_COOKIE_NAME
-    value: "session"
+    value: "__Host-gpc_obt_session"
     availability:
       - BUILD
       - RUNTIME
@@ -69,4 +69,11 @@ env:
     value: "production"
     availability:
       - BUILD
-      - RUNTIME 
+      - RUNTIME
+
+  - variable: FIREBASE_CLIENT_EMAIL
+    secret: FIREBASE_CLIENT_EMAIL
+  - variable: FIREBASE_PRIVATE_KEY
+    secret: FIREBASE_PRIVATE_KEY
+  - variable: COOKIE_SECRET_CURRENT
+    secret: COOKIE_SECRET_CURRENT 

@@ -63,7 +63,7 @@ export async function updateAnagrafica(anagraficaId, body, structureId) {
     updatedAt: new Date(),
     updatedBy: userUid,
     updatedByMail: userMail,
-    updatedByStructure: structureId 
+    updatedByStructure: structureId
   });
 
   const updatedSnap = await anagraficaRef.get();

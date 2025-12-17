@@ -9,4 +9,7 @@ if (!admin.apps.length) {
 }
 
 export const auth = admin.auth();
+export const db = admin.firestore({
+  databaseId: process.env.FIRESTORE_DATABASE_ID || "(default)",
+});
 export default admin;
