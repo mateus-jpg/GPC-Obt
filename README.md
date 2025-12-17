@@ -62,7 +62,7 @@ Sviluppato per OneBridge.
 *   [ ] Ottimizzare le performance del caricamento dati
 *   [ ] Aggiungere test end-to-end
 *   [ ] Aggiungere cifratura con key CMEK dei file caricati
-*   [ ] Aggiungere calendario condiviso per struttura
+*   [ ] Aggiungere calendario condiviso per struttura integrato con google calendar
 
 ### Visione futura 
 *   [ ] Flusso di analisi AI per capire lo stato di avanzamento del migrante
