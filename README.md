@@ -1,6 +1,6 @@
 # GPC - Gestione Presa in Carico
 
-Piattaforma per la gestione delle anagrafiche e delle prese in carico per il Comunity center di Verona, sviluppata per OneBridge, attualmente in Beta.
+Piattaforma per la gestione delle anagrafiche e delle prese in carico per il Community center di Verona, sviluppata per OneBridge, attualmente in Beta.
 
 ## 🚀 Tecnologie Utilizzate
 
@@ -61,8 +61,8 @@ Sviluppato per OneBridge.
 *   [ ] Implementare reportistica avanzata
 *   [ ] Ottimizzare le performance del caricamento dati
 *   [ ] Aggiungere test end-to-end
-*   [ ] Aggiungere encription con key CMEK dei file caricati
-*   [ ] Aggiungere calendario condivo per struttura
+*   [ ] Aggiungere cifratura con key CMEK dei file caricati
+*   [ ] Aggiungere calendario condiviso per struttura integrato con google calendar
 
 ### Visione futura 
 *   [ ] Flusso di analisi AI per capire lo stato di avanzamento del migrante
