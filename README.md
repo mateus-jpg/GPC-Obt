@@ -1,36 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# GPC - Gestione Presa in Carico
 
-## Getting Started
+Piattaforma per la gestione delle anagrafiche e delle prese in carico per il Comunity center di Verona, sviluppata per OneBridge, attualmente in Beta.
 
-First, run the development server:
+## 🚀 Tecnologie Utilizzate
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Il progetto è costruito con un moderno stack tecnologico basato su React e Next.js:
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+*   **Framework**: [Next.js 15](https://nextjs.org/) (App Router)
+*   **Linguaggio**: JavaScript / React 19
+*   **Styling**: [Tailwind CSS 4](https://tailwindcss.com/)
+*   **UI Components**: [Shadcn UI](https://ui.shadcn.com/) (basato su Radix UI)
+*   **Database & Auth**: [Firebase](https://firebase.google.com/) (Firestore, Authentication)
+*   **Admin SDK**: `firebase-admin` per operazioni server-side sicure
+*   **Middleware Auth**: Custom middleware per gestione sessioni e protezione rotte
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+## 🛠️ Prerequisiti
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Prima di iniziare, assicurati di avere installato:
 
-## Learn More
+*   [Node.js](https://nodejs.org/) (versione 18 o superiore)
 
-To learn more about Next.js, take a look at the following resources:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🏗️ Struttura del Progetto
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+*   `src/app`: Contiene le pagine e le rotte dell'applicazione (App Router).
+    *   `(portal)`: Layout principale per l'area autenticata.
+    *   `api`: Endpoint API server-side (es. creazione anagrafica, auth).
+*   `src/components`: Componenti UI riutilizzabili (pulsanti, form, card, ecc.).
+*   `src/lib`: Librerie e configurazioni (es. client Firebase).
+*   `src/middleware.js`: Logica di protezione delle rotte e verifica sessione.
 
-## Deploy on Vercel
+## 🚀 Deployment
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Il progetto è configurato per il deployment su **Firebase App Hosting** tramite il file `apphosting.yaml`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+
+## 📝 Funzionalità Principali
+
+*   **Gestione Anagrafica**: Creazione, modifica e visualizzazione schede beneficiari.
+*   **Dati Strutturati**: Gestione informazioni complesse (Nucleo Familiare, Situazione Legale, Vulnerabilità, ecc.).
+*   **Sicurezza**: Accesso basato su ruoli e strutture di appartenenza.
+*   **Audit**: Tracciamento di chi ha creato o modificato le schede.
+
+
+---
+Sviluppato per OneBridge.
+
+## 📌 TODO
+
+### Completati ✅
+*   [x] Implementazione Middleware Auth Custom (sostituisce next-firebase-auth-edge)
+*   [x] Refactoring struttura dati anagrafica (nested objects)
+*   [x] Implementazione `canBeAccessedBy` a livello root
+*   [x] Configurazione Firebase App Hosting con Secret Manager
+*   [x] Aggiornamento form creazione e modifica anagrafica
+
+### In Corso / Futuri 🚧
+*   [ ] Completare la migrazione dei dati esistenti
+*   [ ] Implementare reportistica avanzata
+*   [ ] Ottimizzare le performance del caricamento dati
+*   [ ] Aggiungere test end-to-end
+*   [ ] Aggiungere encription con key CMEK dei file caricati
+*   [ ] Aggiungere calendario condivo per struttura
+
+### Visione futura 
+*   [ ] Flusso di analisi AI per capire lo stato di avanzamento del migrante
+*   [ ] OCR nel caricamento dei file
