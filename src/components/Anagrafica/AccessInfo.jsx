@@ -17,11 +17,27 @@ export default function AccessInfo({ accesses }) {
 
   // Remove the async/await - accesses is already resolved data
   const [data, setData] = React.useState([]);
-  
+
   React.useEffect(() => {
-    // Just set the data directly
-    setData(accesses || []);
-    console.log("Accesses received:", accesses);
+
+    const flatList = (accesses || []).flatMap((acc) => {
+      if (acc.services && Array.isArray(acc.services)) {
+        return acc.services.map((svc, idx) => ({
+          ...svc,
+          // Merge parent info
+          accessId: acc.id,
+          createdAt: acc.createdAt,
+          createdBy: acc.createdBy,
+          createdByEmail: acc.createdByEmail,
+          uniqueKey: `${acc.id}-${idx}`
+        }));
+      }
+      // Fallback if no services array (should not happen with updated backend)
+      return [acc];
+    });
+
+    setData(flatList);
+    console.log("Accesses received and flattened:", flatList);
   }, [accesses]);
 
   const columns = useMemo(
@@ -77,7 +93,7 @@ export default function AccessInfo({ accesses }) {
                   target="_blank"
                   className="flex items-center gap-1 text-blue-600 hover:underline text-sm"
                 >
-                  <FileIcon className="w-4 h-4" /> 
+                  <FileIcon className="w-4 h-4" />
                   {f.nome.length > 15 ? f.nome.slice(0, 15) + "..." : f.nome}
                 </Link>
               ))}

@@ -37,8 +37,7 @@ export const AuthProvider = ({ children }) => {
         if (operatorDoc.exists()) {
           fullUser = { ...fullUser, ...operatorDoc.data() };
 
-          const structures =  fullUser.structureIds || [];
-          //debugger
+          const structures =  fullUser.structureIds || [];        
           
             const structuresData = await getDocs(query(collection(db, "structures"), where("__name__", "in", structures)));
             const structuresWithId = structuresData.docs.map(doc => ({ id: doc.id, ...doc.data() }));

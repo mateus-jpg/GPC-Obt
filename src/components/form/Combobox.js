@@ -160,7 +160,7 @@ export function CreateMultiCombobox({ label, values = [], onChange, options, pla
         if (!isOpen) setSearchQuery("");
       }}>
         <PopoverTrigger asChild>
-          <Button variant="outline" role="combobox" className="justify-between max-w-full">
+          <Button variant="outline" role="combobox" className="justify-between overflow-hidden text-ellipsis whitespace-nowrap">
             <span className="truncate ">{displayText()}</span>
           </Button>
         </PopoverTrigger>

@@ -19,35 +19,42 @@ import { TiptapEditor } from "@/components/tiptap-editor";
 import { Dropzone } from "@/components/ui/shadcn-io/dropzone"; // 👈 import della dropzone di shadcn
 import { IconDoorEnter } from "@tabler/icons-react";
 import { createAccessAction } from "@/actions/anagrafica/access"; // Server Action sicura
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export default function AccessDialog({ anagraficaId, structureId }) {
   const [open, setOpen] = useState(false);
-  const [content, setContent] = useState("");
-  const [selectedType, setSelectedType] = useState("");
-  const [selectedSubcategories, setSelectedSubcategories] = useState([]);
-  const [altroText, setAltroText] = useState("");
-  const [files, setFiles] = useState([]); 
-  const [classification, setClassification] = useState("");
-  const [referralEntity, setReferralEntity] = useState("");
+  const [loading, setLoading] = useState(false);
 
-
-  // Calcola le sottocategorie basandoti sul tipo selezionato
-  const currentType = AccessTypes.find((t) => t.label === selectedType);
-  const [subCategories, setSubCategories] = useState(
-    currentType ? currentType.subCategories : []
-  );
-
-  const isFormValid =
-    !!selectedType &&
-    selectedSubcategories.length > 0 &&
-    (!selectedSubcategories.includes("Altro") || altroText.trim() !== "");
+  // Initialize state for all types
+  const [formsState, setFormsState] = useState(() => {
+    const initialState = {};
+    AccessTypes.forEach((t) => {
+      initialState[t.value] = {
+        subCategories: [],
+        altroText: "",
+        content: "",
+        files: [],
+        classification: "",
+        referralEntity: "",
+      };
+    });
+    return initialState;
+  });
 
   const resetForm = () => {
-    setContent("");
-    setSelectedType("");
-    setSelectedSubcategories([]);
-    setAltroText("");
-    setFiles([]);
+    const initialState = {};
+    AccessTypes.forEach((t) => {
+      initialState[t.value] = {
+        subCategories: [],
+        altroText: "",
+        content: "",
+        files: [],
+        classification: "",
+        referralEntity: "",
+      };
+    });
+    setFormsState(initialState);
   };
 
   const handleOpenChange = (newOpen) => {
@@ -55,181 +62,236 @@ export default function AccessDialog({ anagraficaId, structureId }) {
     if (!newOpen) resetForm();
   };
 
+  const updateField = (typeValue, field, value) => {
+    setFormsState((prev) => ({
+      ...prev,
+      [typeValue]: {
+        ...prev[typeValue],
+        [field]: value,
+      },
+    }));
+  };
+
+  const isTypeValid = (typeValue) => {
+    const state = formsState[typeValue];
+    return (
+      state.subCategories.length > 0 &&
+      (!state.subCategories.includes("Altro") || state.altroText.trim() !== "")
+    );
+  };
+
+  const getValidTypes = () => {
+    return AccessTypes.filter((t) => isTypeValid(t.value));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!isFormValid) return;
+    const validTypes = getValidTypes();
 
+    if (validTypes.length === 0) return;
+
+    setLoading(true);
     try {
+      debugger;
+      const servicesPayload = validTypes.map((type) => {
+        const state = formsState[type.value];
+
+        const cleanedState = {};
+        cleanedState.tipoAccesso = type.label;
+        if (state.subCategories.length > 0) cleanedState.sottoCategorie = state.subCategories;
+        if (state.subCategories.includes("Altro") && state.altroText.trim() !== "")
+          cleanedState.altro = state.altroText.trim();
+        if (state.content.trim() !== "") cleanedState.note = state.content.trim();
+        if (state.classification) cleanedState.classificazione = state.classification;
+        if (state.referralEntity) cleanedState.enteRiferimento = state.referralEntity;
+        if (state.files.length > 0) cleanedState.files = state.files;
+
+        debugger;
+        return cleanedState;
+      });
+
       const payload = {
-        anagraficaId, // la persona o entità collegata all'accesso
-        tipoAccesso: selectedType, 
-        sottoCategorie: selectedSubcategories,
-        altro: selectedSubcategories.includes("Altro") ? altroText.trim() : undefined,
-        note: content?.trim() || undefined,
-        classificazione: classification || undefined,
-        enteRiferimento: referralEntity || undefined,
-        files, 
-        structureId, // struttura da cui viene registrato l'accesso
+        anagraficaId,
+        structureId,
+        services: servicesPayload,
       };
-      console.log(files)
-      // Chiamata alla Server Action sicura
-      const result = await createAccessAction(payload);
 
-      console.log('Accesso creato con successo:', result);
+      await createAccessAction(payload);
 
-      // Reset e chiusura dialog
+      console.log("Accesso unificato creato con successo");
       setOpen(false);
       resetForm();
     } catch (error) {
-      console.error('Errore durante la creazione dell’accesso:', error);
-      alert('Si è verificato un errore durante la creazione dell’accesso.');
+      console.error("Errore durante la creazione dell'accesso:", error);
+      alert("Si è verificato un errore durante la creazione dell'accesso.");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleTypeChange = (value) => {
-    setSelectedType(value || "");
-    setSelectedSubcategories([]);
-    setAltroText("");
-
-    const newType = AccessTypes.find((t) => t.label === value);
-    setSubCategories(newType ? newType.subCategories : []);
-  };
+  const validTypesCount = getValidTypes().length;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild className=" cursor-pointer">
-        <Button className={""}>Nuovo accesso
+      <DialogTrigger asChild className="cursor-pointer">
+        <Button className={""}>
+          Nuovo accesso
           <IconDoorEnter className="ml-1" />
         </Button>
-
       </DialogTrigger>
 
-      <DialogContent className="max-w-4xl min-w-4xl">
+      <DialogContent className="max-w-6xl min-w-3xl min-h-4xl">
         <DialogHeader>
-          <DialogTitle>Registra nuovo accesso</DialogTitle>
+          <DialogTitle>Registra nuovo accesso </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="grid gap-6 py-4">
-          {/* STEP 1 — Selezione tipologia */}
-          <div className="grid gap-2">
-            <Combobox
-              label="Tipologia di accesso"
-              value={selectedType}
-              onChange={handleTypeChange}
-              options={AccessTypes.map((t) => t.label)}
-              placeholder="Seleziona la tipologia..."
-            />
-          </div>
-
-          <div className={clsx("grid gap-4 align-top grid-cols-2")}>
-            {/* STEP 2 — Sottocategorie */}
-            {selectedType && subCategories.length > 0 && (
-              <div className="grid gap-2">
-                <CreateMultiCombobox
-                  label="Sottocategorie"
-                  values={selectedSubcategories}
-                  onChange={(values) => {
-                    setSelectedSubcategories(values);
-                    if (!values.includes("Altro")) setAltroText("");
-                  }}
-                  options={subCategories}
-                  placeholder="Seleziona o aggiungi sottocategorie..."
-                />
-              </div>
-            )}
-
-            {/* STEP 3 — Input Altro */}
-            {selectedSubcategories.includes("Altro") && (
-              <div className="flex flex-col gap-2 align-top">
-                <Label htmlFor="altro">Specifica "Altro"</Label>
-                <Input
-                  id="altro"
-                  value={altroText}
-                  onChange={(e) => setAltroText(e.target.value)}
-                  placeholder="Descrivi la sottocategoria personalizzata"
-                  required
-                />
-              </div>
-            )}
-          </div>
-
-          {/* STEP 4 — Editor di testo */}
-          <div className="grid gap-2">
-            <Label>Note aggiuntive</Label>
-            <TiptapEditor
-              content={content}
-              onChange={setContent}
-              placeholder="Inserisci qui eventuali note o dettagli..."
-            />
-          </div>
-
-          {/* STEP 5 — Dropzone per allegati */}
-          <div className="grid gap-2">
-            <Label>Allegati</Label>
-            <Dropzone
-              onDrop={(acceptedFiles) => {
-                setFiles((prev) => [...prev, ...acceptedFiles]);
-              }}
-              className="border border-dashed border-gray-300 rounded-lg p-4 cursor-pointer"
-            >
-              <p className="text-sm text-gray-500">
-                Trascina qui i file o clicca per selezionarli
-              </p>
-            </Dropzone>
-
-            {/* File list preview */}
-            {files.length > 0 && (
-              <ul className="text-sm mt-2 space-y-1">
-                {files.map((file, idx) => (
-                  <li
-                    key={idx}
-                    className="flex justify-between items-center border rounded px-3 py-1 bg-muted/30"
-                  >
-                    <span className="truncate max-w-[80%]">{file.name}</span>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      onClick={() =>
-                        setFiles((prev) => prev.filter((_, i) => i !== idx))
-                      }
-                    >
-                      Rimuovi
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              <Combobox
-                label="Classificazione Intervento"
-                value={classification}
-                onChange={(value) => setClassification(value || "")}
-                options={AccessClassifications}
-                placeholder="Seleziona la classificazione..."
-              />
-              <div className="flex flex-col gap-2">
-              <Label htmlFor="referralEntity">Ente di riferimento (per Referral)</Label>
-              <Input
-                label="Ente di riferimento"
-                value={referralEntity}
-                onChange={(e) => setReferralEntity(e.target.value || "")}
-                placeholder="Seleziona l'ente di riferimento..."
-                />
-                </div>
-              
+        <form onSubmit={handleSubmit} className="flex-1 w-full flex flex-col overflow-hidden">
+          <Tabs defaultValue={AccessTypes[0].value} className="flex-1 flex flex-col overflow-hidden">
+            <div className="mb-4 overflow-x-auto rounded-md bg-gray-200 border-b">
+              {/* <ScrollArea className="w-full whitespace-nowrap rounded-md border"> */}
+                <TabsList className="flex w-max space-x-2 overflow-x-auto ">
+                  {AccessTypes.map((type) => {
+                    const isValid = isTypeValid(type.value);
+                    return (
+                      <TabsTrigger
+                        key={type.value}
+                        value={type.value}
+                        className={clsx(
+                          "data-[state=active]:bg-primary data-[state=active]:text-primary-foreground relative",
+                          isValid && "bg-lime-600/20 font-bold",
+                        )}
+                      >
+                        {type.label}
+                      </TabsTrigger>
+                    );
+                  })}
+                </TabsList>
+             {/*  </ScrollArea> */}
             </div>
-          </div>
 
-          <DialogFooter>
+            <div className="flex-1 overflow-y-auto pr-2">
+              {AccessTypes.map((type) => {
+                const state = formsState[type.value];
+                return (
+                  <TabsContent key={type.value} value={type.value} className="space-y-6 mt-0">
+                    <div className={clsx("grid gap-4 align-top grid-cols-1 md:grid-cols-2")}>
+                      {/* Subcategories */}
+                      <div className="flex flex-col gap-2 min-w-0">
+                        <CreateMultiCombobox
+                          label="Sottocategorie"
+                          values={state.subCategories}
+                          onChange={(values) => {
+                            updateField(type.value, "subCategories", values);
+                            if (!values.includes("Altro")) {
+                              updateField(type.value, "altroText", "");
+                            }
+                          }}
+                          options={type.subCategories}
+                          placeholder="Seleziona o aggiungi sottocategorie..."
+                        />
+                      </div>
+
+                      {/* Altro Input */}
+                      {state.subCategories.includes("Altro") && (
+                        <div className="flex flex-col gap-2 align-top">
+                          <Label htmlFor={`altro-${type.value}`}>Specifica "Altro"</Label>
+                          <Input
+                            id={`altro-${type.value}`}
+                            value={state.altroText}
+                            onChange={(e) => updateField(type.value, "altroText", e.target.value)}
+                            placeholder="Descrivi la sottocategoria personalizzata"
+                            required
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Note Editor */}
+                    <div className="grid gap-2">
+                      <Label>Note aggiuntive</Label>
+                      <TiptapEditor
+                        content={state.content}
+                        onChange={(val) => updateField(type.value, "content", val)}
+                        placeholder={`Note per ${type.label}...`}
+                      />
+                    </div>
+
+                    {/* Files & Extra Fields */}
+                    <div className="grid gap-2">
+                      <Label>Allegati</Label>
+                      <Dropzone
+                        onDrop={(acceptedFiles) => {
+                          updateField(type.value, "files", [...state.files, ...acceptedFiles]);
+                        }}
+                        className="border border-dashed border-gray-300 rounded-lg p-4 cursor-pointer"
+                      >
+                        <p className="text-sm text-gray-500">
+                          Trascina qui i file o clicca per selezionarli
+                        </p>
+                      </Dropzone>
+
+                      {/* File list preview */}
+                      {state.files.length > 0 && (
+                        <ul className="text-sm mt-2 space-y-1">
+                          {state.files.map((file, idx) => (
+                            <li
+                              key={idx}
+                              className="flex justify-between items-center border rounded px-3 py-1 bg-muted/30"
+                            >
+                              <span className="truncate max-w-[80%]">{file.name}</span>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  const newFiles = state.files.filter((_, i) => i !== idx);
+                                  updateField(type.value, "files", newFiles);
+                                }}
+                              >
+                                Rimuovi
+                              </Button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <Combobox
+                          label="Classificazione Intervento"
+                          value={state.classification}
+                          onChange={(value) => updateField(type.value, "classification", value || "")}
+                          options={AccessClassifications}
+                          placeholder="Seleziona la classificazione..."
+                        />
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor={`referral-${type.value}`}>
+                            Ente di riferimento (per Referral)
+                          </Label>
+                          <Input
+                            id={`referral-${type.value}`}
+                            value={state.referralEntity}
+                            onChange={(e) =>
+                              updateField(type.value, "referralEntity", e.target.value || "")
+                            }
+                            placeholder="Seleziona l'ente di riferimento..."
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </TabsContent>
+                );
+              })}
+            </div>
+          </Tabs>
+
+          <DialogFooter className="mt-4">
             <DialogClose asChild>
-              <Button type="button" variant="outline">
+              <Button type="button" variant="outline" disabled={loading}>
                 Annulla
               </Button>
             </DialogClose>
-            <Button type="submit" disabled={!isFormValid}>
-              Salva
+            <Button type="submit" disabled={validTypesCount === 0 || loading}>
+              {loading ? "Salvataggio..." : `Salva ${validTypesCount > 0 ? `(${validTypesCount})` : ""}`}
             </Button>
           </DialogFooter>
         </form>

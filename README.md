@@ -52,18 +52,20 @@ Sviluppato per OneBridge.
 ### Completati ✅
 *   [x] Implementazione Middleware Auth Custom (sostituisce next-firebase-auth-edge)
 *   [x] Refactoring struttura dati anagrafica (nested objects)
-*   [x] Implementazione `canBeAccessedBy` a livello root
 *   [x] Configurazione Firebase App Hosting con Secret Manager
 *   [x] Aggiornamento form creazione e modifica anagrafica
 
 ### In Corso / Futuri 🚧
+*   [ ] migrate all api route to server action 
+*   [ ] slowly migrate to Typescript
+*   [ ] Tab nella creazione degli accessi
 *   [ ] Completare la migrazione dei dati esistenti
-*   [ ] Implementare reportistica avanzata
-*   [ ] Ottimizzare le performance del caricamento dati
+*   [ ] Implementare reportistica in dashboard
 *   [ ] Aggiungere test end-to-end
 *   [ ] Aggiungere cifratura con key CMEK dei file caricati
-*   [ ] Aggiungere calendario condiviso per struttura integrato con google calendar
+*   [ ] Aggiungere calendario condiviso per struttura integrato con google calendario 
+
 
 ### Visione futura 
-*   [ ] Flusso di analisi AI per capire lo stato di avanzamento del migrante
+*   [ ] Flusso di analisi clusterizzata per capire lo stato di avanzamento del migrante
 *   [ ] OCR nel caricamento dei file

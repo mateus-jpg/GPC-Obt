@@ -75,6 +75,7 @@ export default async function AnagraficaViewPage({ params }) {
     getEventsAction(id),
     getAnagraficaData(id)
   ]);
+  console.log(anagrafica)
   console.log(anagraficaAccesses)
   console.log(anagraficaEvents)
   if (!anagrafica) {
