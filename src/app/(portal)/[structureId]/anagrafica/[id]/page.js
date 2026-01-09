@@ -178,7 +178,7 @@ export default async function AnagraficaViewPage({ params }) {
           </Link>
         </Button>
         <div className="flex gap-2">
-          <EventDialog anagraficaId={anagrafica.id} structureId={structureId} />
+          {/* <EventDialog anagraficaId={anagrafica.id} structureId={structureId} /> */}
           <AccessDialog anagraficaId={anagrafica.id} structureId={structureId} />
         </div>
       </div>

@@ -31,6 +31,7 @@ export async function createEventAction(payload
     sottocategorie = [],
     altro = null,
     note = null,
+    title = null,
     dataOra = null,
     files = [],
     classificazione = null,
@@ -40,7 +41,7 @@ export async function createEventAction(payload
 
   if (!anagraficaId || !tipoEvento) throw new Error('Missing required fields');
 
-  
+
   const anagraficaRef = adminDb.collection('anagrafica').doc(anagraficaId);
   const anagraficaSnap = await anagraficaRef.get();
   if (!anagraficaSnap.exists) throw new Error('Anagrafica not found');
@@ -48,17 +49,17 @@ export async function createEventAction(payload
   const anagraficaData = anagraficaSnap.data() || {};
   const allowedStructures = anagraficaData.canBeAccessedBy || anagraficaData.structureIds || [];
 
-  
+
   let operatorDoc = await adminDb.collection('operators').doc(userUid).get();
-/*   if (!operatorDoc.exists) {
-    operatorDoc = await adminDb.collection('users').doc(userUid).get();
-  } */
+  /*   if (!operatorDoc.exists) {
+      operatorDoc = await adminDb.collection('users').doc(userUid).get();
+    } */
   if (!operatorDoc.exists) throw new Error('Operator not found');
 
   const operatorData = operatorDoc.data() || {};
   const operatorStructures = operatorData.structureIds || operatorData.structureId || [];
 
-  
+
   if (!arraysIntersect(operatorStructures, allowedStructures)) {
     throw new Error('Forbidden: operator not allowed for this anagrafica');
   }
@@ -66,7 +67,7 @@ export async function createEventAction(payload
   if (structureId && !allowedStructures.includes(structureId)) {
     throw new Error('Forbidden: invalid structureId');
   }
-  
+
   const eventId = randomUUID();
   const uploadedFiles = [];
 
@@ -85,17 +86,18 @@ export async function createEventAction(payload
       nome: a.name,
       tipo: a.type,
       dimensione: a.size,
-      path: storagePath, 
+      path: storagePath,
     });
   }
 
-  
+
   const eventData = {
     anagraficaId,
     tipoEvento,
     sottocategorie,
     altro,
     note,
+    title,
     dataOra: dataOra || null,
     files: uploadedFiles,
     createdBy: userUid,
@@ -122,7 +124,7 @@ export async function getEventsAction(anagraficaId) {
 
   if (!anagraficaId) throw new Error('Missing anagraficaId');
 
-  
+
   const anagraficaRef = adminDb.collection('anagrafica').doc(anagraficaId);
   const anagraficaSnap = await anagraficaRef.get();
   if (!anagraficaSnap.exists) throw new Error('Anagrafica not found');
@@ -131,7 +133,7 @@ export async function getEventsAction(anagraficaId) {
   const allowedStructures =
     anagraficaData.canBeAccessedBy || anagraficaData.structureIds || [];
 
-  
+
   let operatorDoc = await adminDb.collection('operators').doc(userUid).get();
   if (!operatorDoc.exists) {
     operatorDoc = await adminDb.collection('users').doc(userUid).get();
@@ -142,12 +144,12 @@ export async function getEventsAction(anagraficaId) {
   const operatorStructures =
     operatorData.structureIds || operatorData.structureId || [];
 
-  
+
   if (!arraysIntersect(operatorStructures, allowedStructures)) {
     throw new Error('Forbidden: operator not allowed for this anagrafica');
   }
 
-  
+
   const snap = await adminDb
     .collection('eventi')
     .where('anagraficaId', '==', anagraficaId)
@@ -159,7 +161,7 @@ export async function getEventsAction(anagraficaId) {
     const data = doc.data();
     eventi.push({
       id: doc.id,
-      sanitizedNote : stripHtml(data.note || '' ),
+      sanitizedNote: stripHtml(data.note || ''),
       ...data,
     });
   });

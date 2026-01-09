@@ -11,6 +11,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MaterialReactTable } from "material-react-table";
 import Link from "next/link";
 import { FileIcon } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export default function AccessInfo({ accesses }) {
   if (!accesses) return null;
@@ -87,15 +93,27 @@ export default function AccessInfo({ accesses }) {
           return (
             <div className="flex flex-col gap-1">
               {files.map((f, i) => (
-                <Link
-                  key={i}
-                  href={`https://storage.googleapis.com/${process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}/${f.path}`}
-                  target="_blank"
-                  className="flex items-center gap-1 text-blue-600 hover:underline text-sm"
-                >
-                  <FileIcon className="w-4 h-4" />
-                  {f.nome.length > 15 ? f.nome.slice(0, 15) + "..." : f.nome}
-                </Link>
+                <TooltipProvider key={i}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Link
+                        href={`https://storage.googleapis.com/${process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}/${f.path}`}
+                        target="_blank"
+                        className="flex items-center gap-1 text-blue-600 hover:underline text-sm"
+                      >
+                        <FileIcon className="w-4 h-4" />
+                        {f.nome.length > 15 ? f.nome.slice(0, 15) + "..." : f.nome}
+                      </Link>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      <div className="text-xs space-y-1">
+                        <p><strong>Nome Originale:</strong> {f.nomeOriginale || "-"}</p>
+                        <p><strong>Creato il:</strong> {f.dataCreazione ? formatDate(f.dataCreazione) : "-"}</p>
+                        <p><strong>Scadenza:</strong> {f.dataScadenza ? formatDate(f.dataScadenza) : "-"}</p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               ))}
             </div>
           );
@@ -105,6 +123,12 @@ export default function AccessInfo({ accesses }) {
       {
         accessorKey: "createdAt",
         header: "Data",
+        Cell: ({ cell }) => formatDate(cell.getValue()),
+        size: 150,
+      },
+      {
+        accessorKey: "reminderDate",
+        header: "Promemoria",
         Cell: ({ cell }) => formatDate(cell.getValue()),
         size: 150,
       },

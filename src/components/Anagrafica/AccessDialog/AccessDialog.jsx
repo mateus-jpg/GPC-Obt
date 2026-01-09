@@ -21,6 +21,7 @@ import { IconDoorEnter } from "@tabler/icons-react";
 import { createAccessAction } from "@/actions/anagrafica/access"; // Server Action sicura
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import DatePicker from "@/components/form/DatePicker";
 
 export default function AccessDialog({ anagraficaId, structureId }) {
   const [open, setOpen] = useState(false);
@@ -36,7 +37,10 @@ export default function AccessDialog({ anagraficaId, structureId }) {
         content: "",
         files: [],
         classification: "",
+        classification: "",
         referralEntity: "",
+        reminderDate: null,
+        reminderTime: "",
       };
     });
     return initialState;
@@ -51,7 +55,10 @@ export default function AccessDialog({ anagraficaId, structureId }) {
         content: "",
         files: [],
         classification: "",
+        classification: "",
         referralEntity: "",
+        reminderDate: null,
+        reminderTime: "",
       };
     });
     setFormsState(initialState);
@@ -104,7 +111,21 @@ export default function AccessDialog({ anagraficaId, structureId }) {
         if (state.content.trim() !== "") cleanedState.note = state.content.trim();
         if (state.classification) cleanedState.classificazione = state.classification;
         if (state.referralEntity) cleanedState.enteRiferimento = state.referralEntity;
-        if (state.files.length > 0) cleanedState.files = state.files;
+        if (state.files.length > 0) {
+          cleanedState.files = state.files.map(f => ({
+            ...f,
+            creationDate: f.creationDate instanceof Date ? f.creationDate.toISOString() : f.creationDate,
+            expirationDate: f.expirationDate instanceof Date ? f.expirationDate.toISOString() : f.expirationDate,
+          }));
+        }
+        if (state.reminderDate) {
+          const date = new Date(state.reminderDate);
+          if (state.reminderTime) {
+            const [hours, minutes] = state.reminderTime.split(':');
+            date.setHours(parseInt(hours), parseInt(minutes));
+          }
+          cleanedState.reminderDate = date.toISOString();
+        }
 
         debugger;
         return cleanedState;
@@ -147,26 +168,26 @@ export default function AccessDialog({ anagraficaId, structureId }) {
 
         <form onSubmit={handleSubmit} className="flex-1 w-full flex flex-col overflow-hidden">
           <Tabs defaultValue={AccessTypes[0].value} className="flex-1 flex flex-col overflow-hidden">
-            <div className="mb-4 overflow-x-auto rounded-md bg-gray-200 border-b">
+            <div className="mb-4 overflow-x-auto rounded-md bg-gray-100  border-b px-1">
               {/* <ScrollArea className="w-full whitespace-nowrap rounded-md border"> */}
-                <TabsList className="flex w-max space-x-2 overflow-x-auto ">
-                  {AccessTypes.map((type) => {
-                    const isValid = isTypeValid(type.value);
-                    return (
-                      <TabsTrigger
-                        key={type.value}
-                        value={type.value}
-                        className={clsx(
-                          "data-[state=active]:bg-primary data-[state=active]:text-primary-foreground relative",
-                          isValid && "bg-lime-600/20 font-bold",
-                        )}
-                      >
-                        {type.label}
-                      </TabsTrigger>
-                    );
-                  })}
-                </TabsList>
-             {/*  </ScrollArea> */}
+              <TabsList className="flex w-max space-x-2 overflow-x-auto ">
+                {AccessTypes.map((type) => {
+                  const isValid = isTypeValid(type.value);
+                  return (
+                    <TabsTrigger
+                      key={type.value}
+                      value={type.value}
+                      className={clsx(
+                        "data-[state=active]:bg-primary data-[state=active]:text-primary-foreground relative",
+                        isValid && "bg-lime-600/20 font-bold",
+                      )}
+                    >
+                      {type.label}
+                    </TabsTrigger>
+                  );
+                })}
+              </TabsList>
+              {/*  </ScrollArea> */}
             </div>
 
             <div className="flex-1 overflow-y-auto pr-2">
@@ -221,7 +242,14 @@ export default function AccessDialog({ anagraficaId, structureId }) {
                       <Label>Allegati</Label>
                       <Dropzone
                         onDrop={(acceptedFiles) => {
-                          updateField(type.value, "files", [...state.files, ...acceptedFiles]);
+                          const newFiles = acceptedFiles.map((file) => ({
+                            file,
+                            fileName: file.name,
+                            name: file.name,
+                            creationDate: new Date(),
+                            expirationDate: null,
+                          }));
+                          updateField(type.value, "files", [...state.files, ...newFiles]);
                         }}
                         className="border border-dashed border-gray-300 rounded-lg p-4 cursor-pointer"
                       >
@@ -232,27 +260,74 @@ export default function AccessDialog({ anagraficaId, structureId }) {
 
                       {/* File list preview */}
                       {state.files.length > 0 && (
-                        <ul className="text-sm mt-2 space-y-1">
-                          {state.files.map((file, idx) => (
-                            <li
+                        <div className="mt-4 space-y-3">
+                          {state.files.map((fileObj, idx) => (
+                            <div
                               key={idx}
-                              className="flex justify-between items-center border rounded px-3 py-1 bg-muted/30"
+                              className="border rounded-md p-3 bg-muted/30 grid gap-3"
                             >
-                              <span className="truncate max-w-[80%]">{file.name}</span>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => {
-                                  const newFiles = state.files.filter((_, i) => i !== idx);
-                                  updateField(type.value, "files", newFiles);
-                                }}
-                              >
-                                Rimuovi
-                              </Button>
-                            </li>
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm font-medium truncate max-w-[80%]">
+                                  {fileObj.file.name}
+                                </span>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 text-destructive hover:text-destructive/90"
+                                  onClick={() => {
+                                    const newFiles = state.files.filter((_, i) => i !== idx);
+                                    updateField(type.value, "files", newFiles);
+                                  }}
+                                >
+                                  Rimuovi
+                                </Button>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                  <Label htmlFor={`file-name-${idx}`} className="text-xs">
+                                    Nome Documento
+                                  </Label>
+                                  <Input
+                                    id={`file-name-${idx}`}
+                                    value={fileObj.name}
+                                    onChange={(e) => {
+                                      const newFiles = [...state.files];
+                                      newFiles[idx] = { ...newFiles[idx], name: e.target.value };
+                                      updateField(type.value, "files", newFiles);
+                                    }}
+                                    className="h-9"
+                                    placeholder="Nome del documento"
+                                  />
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <DatePicker
+                                    label="Data Doc."
+                                    value={fileObj.creationDate}
+                                    onChange={(date) => {
+                                      const newFiles = [...state.files];
+                                      newFiles[idx] = { ...newFiles[idx], creationDate: date };
+                                      updateField(type.value, "files", newFiles);
+                                    }}
+                                    fromYear={2000}
+                                  />
+                                  <DatePicker
+                                    label="Scadenza (Opz.)"
+                                    value={fileObj.expirationDate}
+                                    onChange={(date) => {
+                                      const newFiles = [...state.files];
+                                      newFiles[idx] = { ...newFiles[idx], expirationDate: date };
+                                      updateField(type.value, "files", newFiles);
+                                    }}
+                                    fromYear={new Date().getFullYear()}
+                                    toYear={new Date().getFullYear() + 10}
+                                  />
+                                </div>
+                              </div>
+                            </div>
                           ))}
-                        </ul>
+                        </div>
                       )}
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
@@ -274,6 +349,30 @@ export default function AccessDialog({ anagraficaId, structureId }) {
                               updateField(type.value, "referralEntity", e.target.value || "")
                             }
                             placeholder="Seleziona l'ente di riferimento..."
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Reminder Section */}
+                    <div className="grid gap-2 border-t pt-4 mt-2">
+                      <Label className="text-base font-semibold">Promemoria (Opzionale)</Label>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <DatePicker
+                          label="Data Promemoria"
+                          value={state.reminderDate}
+                          onChange={(date) => updateField(type.value, "reminderDate", date)}
+                          fromYear={new Date().getFullYear()}
+                          toYear={new Date().getFullYear() + 5}
+                        />
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor={`time-${type.value}`} className="text-sm font-medium">Ora</Label>
+                          <Input
+                            id={`time-${type.value}`}
+                            type="time"
+                            value={state.reminderTime}
+                            onChange={(e) => updateField(type.value, "reminderTime", e.target.value)}
+                            disabled={!state.reminderDate}
                           />
                         </div>
                       </div>

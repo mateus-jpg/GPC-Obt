@@ -16,6 +16,99 @@ function arraysIntersect(a = [], b = []) {
   return (b || []).some(x => set.has(x));
 }
 
+async function createAccessInternal({ anagraficaId, services, structureId, userUid, structureIds }) {
+  const accessRef = adminDb.collection('accessi').doc();
+  const accessId = accessRef.id;
+
+  const processedServices = await Promise.all(services.map(async (svc, index) => {
+    const uploadedFiles = [];
+
+    if (svc.files && svc.files.length > 0) {
+      for (const fileItem of svc.files) {
+        // Handle both raw File objects (legacy) and new object structure with metadata
+        let file = fileItem;
+        let metadata = {
+          nome: null,
+          dataCreazione: null,
+          dataScadenza: null
+        };
+
+        if (fileItem.file && typeof fileItem.file.arrayBuffer === 'function') {
+          // New structure: { file, name, creationDate, expirationDate }
+          file = fileItem.file;
+          metadata = {
+            nome: fileItem.name,
+            dataCreazione: fileItem.creationDate,
+            dataScadenza: fileItem.expirationDate
+          };
+        }
+
+        const arrayBuffer = await file.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        // Use a unique name for storage to avoid collisions, but keep original name in metadata
+        const fileNameSanitized = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+        const storagePath = `files/${anagraficaId}/accessi/${accessId}/${index}_${randomUUID()}_${fileNameSanitized}`;
+
+        const fileRef = adminStorage.bucket().file(storagePath);
+        await fileRef.save(buffer, { contentType: file.type, resumable: false });
+
+        uploadedFiles.push({
+          nome: metadata.nome || file.name,
+          nomeOriginale: file.name,
+          tipo: file.type,
+          dimensione: file.size,
+          path: storagePath,
+          dataCreazione: metadata.dataCreazione ? new Date(metadata.dataCreazione).toISOString() : new Date().toISOString(),
+          dataScadenza: metadata.dataScadenza ? new Date(metadata.dataScadenza).toISOString() : null,
+        });
+      }
+    }
+
+    let reminderId = null;
+    if (svc.reminderDate) {
+      const reminderRef = adminDb.collection('reminders').doc();
+      reminderId = reminderRef.id;
+
+      await reminderRef.set({
+        anagraficaId,
+        structureId,
+        accessId,
+        serviceType: svc.tipoAccesso,
+        date: svc.reminderDate,
+        note: svc.note || '',
+        createdBy: userUid,
+        createdAt: new Date().toISOString(),
+        status: 'pending',
+        linkedToAccess: true
+      });
+    }
+
+    return {
+      tipoAccesso: svc.tipoAccesso || null,
+      sottoCategorie: svc.sottoCategorie ?? null,
+      altro: svc.altro ?? null,
+      note: svc.note?.trim() || null,
+      classificazione: svc.classificazione ?? null,
+      enteRiferimento: svc.enteRiferimento ?? null,
+      files: uploadedFiles || [],
+      reminderDate: svc.reminderDate ?? null,
+      reminderId: reminderId ?? null,
+    };
+  }));
+
+  const accessData = {
+    anagraficaId,
+    services: processedServices,
+    createdByStructure: structureId,
+    createdBy: userUid,
+    createdAt: new Date().toISOString(),
+    structureIds,
+  };
+
+  await accessRef.set(accessData);
+  return { accessId, accessData };
+}
+
 export async function createAccessAction(payload) {
   const hdr = await headers();
   const userUid = hdr.get('x-user-uid');
@@ -57,57 +150,13 @@ export async function createAccessAction(payload) {
     throw new Error('Forbidden: structureId not allowed for this anagrafica');
   }
 
-
-  const accessId = randomUUID();
-
-  // Process each service (upload files, sanitize notes)
-  const processedServices = await Promise.all(services.map(async (svc, index) => {
-    const uploadedFiles = [];
-    if (svc.files && svc.files.length > 0) {
-      for (const a of svc.files) {
-        const arrayBuffer = await a.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        // Use index/type to organize files folders if needed, or just unique paths
-        const storagePath = `files/${anagraficaId}/accessi/${accessId}/${index}_${a.name}`;
-
-        const fileRef = adminStorage.bucket().file(storagePath);
-        await fileRef.save(buffer, {
-          contentType: a.type,
-          resumable: false,
-        });
-
-        uploadedFiles.push({
-          nome: a.name,
-          tipo: a.type,
-          dimensione: a.size,
-          path: storagePath,
-        });
-      }
-    }
-
-    return {
-      tipoAccesso: svc.tipoAccesso,
-      sottoCategorie: svc.sottoCategorie,
-      altro: svc.altro,
-      note: svc.note?.trim() || null,
-      classificazione: svc.classificazione || null,
-      enteRiferimento: svc.enteRiferimento || null,
-      files: uploadedFiles,
-    };
-  }));
-
-
-  const accessData = {
+  const { accessId, accessData } = await createAccessInternal({
     anagraficaId,
-    services: processedServices,
-    createdByStructure: structureId,
-    createdBy: userUid,
-    createdByEmail: userEmail || null,
+    services,
+    structureId,
+    userUid,
     structureIds: allowedStructures,
-    createdAt: new Date().toISOString(),
-  };
-
-  await adminDb.collection('accessi').doc(accessId).set(accessData);
+  });
 
   return { success: true, accessId, accessData };
 }

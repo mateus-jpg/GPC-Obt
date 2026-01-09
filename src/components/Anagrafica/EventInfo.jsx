@@ -74,6 +74,12 @@ export default function EventInfo({ events }) {
         Cell: ({ cell }) => formatDate(cell.getValue(), true) || "-",
       },
       {
+        accessorKey: "title",
+        header: "Titolo",
+        size: 200,
+        Cell: ({ cell }) => <span className="font-semibold">{cell.getValue() || "-"}</span>,
+      },
+      {
         accessorKey: "tipoEvento",
         header: "Tipo Evento",
         size: 160,
@@ -163,7 +169,7 @@ export default function EventInfo({ events }) {
           ) : (
             <MaterialReactTable
               muiTablePaperProps={{
-                sx: { borderRadius: 3, border: '1px solid var(--color-gray-200)', elevation : 3 },
+                sx: { borderRadius: 3, border: '1px solid var(--color-gray-200)', elevation: 3 },
               }}
               columns={columns}
               data={data}

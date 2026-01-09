@@ -9,16 +9,29 @@ import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import DatePicker from "@/components/form/DatePicker";
-import Countries from "@/data/countries.json"; // Assuming you have a countries.json file
+import Countries from "@/data/countries.json";
 import { CreateCombobox, CreateMultiCombobox } from "@/components/form/Combobox";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+// Action
+import { createAnagrafica } from "@/actions/anagrafica/anagrafica";
 
-
+// New imports for Access/Files
+import { AccessTypes, AccessClassifications } from "@/components/Anagrafica/AccessDialog/AccessTypes";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import clsx from "clsx";
+import { Dropzone } from "@/components/ui/shadcn-io/dropzone";
+import { TiptapEditor } from "@/components/tiptap-editor";
+import { Loader2 } from "lucide-react";
 
 export default function AnagraficaForm({ params }) {
   const { structureId } = React.use(params);
   const { user } = useAuth();
+  const router = useRouter();
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Form Data for Anagrafica
   const [formData, setFormData] = useState({
     anagrafica: {
       cognome: "",
@@ -58,6 +71,22 @@ export default function AnagraficaForm({ params }) {
     canBeAccessedBy: [structureId] || [],
   });
 
+  // State for Access Services (similar to AccessDialog)
+  const initialFormState = AccessTypes.reduce((acc, type) => {
+    acc[type.value] = {
+      subCategories: [],
+      altroText: "",
+      content: "", // notes
+      files: [],
+      classification: "",
+      referralEntity: "",
+      reminderDate: null,
+      reminderTime: "",
+    };
+    return acc;
+  }, {});
+  const [accessState, setAccessState] = useState(initialFormState);
+
   const handleChange = (group, field, value) => {
     setFormData((prev) => ({
       ...prev,
@@ -68,53 +97,87 @@ export default function AnagraficaForm({ params }) {
     }));
   };
 
+  // Helper for Access State
+  const handleAccessChange = (typeVal, field, value) => {
+    setAccessState((prev) => ({
+      ...prev,
+      [typeVal]: {
+        ...prev[typeVal],
+        [field]: value,
+      },
+    }));
+  };
+
+  const isTypeValid = (typeVal) => {
+    const s = accessState[typeVal];
+    if (s.subCategories.length > 0) {
+      if (s.subCategories.includes("Altro") && !s.altroText.trim()) return false;
+      return true;
+    }
+    return false;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsSaving(true);
 
     try {
-      // Assicurati di avere l'utente loggato
       if (!user || !user.uid) throw new Error("Utente non autenticato");
 
-      // Prepara il payload
+      // 1. Prepare Anagrafica Payload
       const payload = {
         ...formData,
-        registeredBy: user.uid, // UID dell'operatore
-        registeredByStructure: structureId, // struttura selezionata
+        registeredByStructure: structureId,
       };
 
-      // Sostituisci referral se necessario
       if (payload.referral.referral === "Altro" || payload.referral.referral === "Ente partner") {
         if (payload.referral.referralAltro?.trim()) {
           payload.referral.referral = payload.referral.referralAltro.trim();
         }
       }
-
-      // Rimuovi referralAltro dal payload (non serve salvare)
       delete payload.referral.referralAltro;
 
-      // POST verso l'API
-      const res = await fetch("/api/anagrafica/new", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+      // 2. Prepare Services (Access) Payload
+      const validTypes = AccessTypes.filter((t) => isTypeValid(t.value));
+      const servicesPayload = validTypes.map((type) => {
+        const state = accessState[type.value];
+        const cleanedState = {
+          tipoAccesso: type.label,
+        };
+        if (state.subCategories.length > 0) cleanedState.sottoCategorie = state.subCategories;
+        if (state.subCategories.includes("Altro") && state.altroText.trim() !== "")
+          cleanedState.altro = state.altroText.trim();
+        if (state.content.trim() !== "") cleanedState.note = state.content.trim();
+        if (state.classification) cleanedState.classificazione = state.classification;
+        if (state.referralEntity) cleanedState.enteRiferimento = state.referralEntity;
+        if (state.files.length > 0) cleanedState.files = state.files; // Array of File objects
+        if (state.reminderDate) {
+          const date = new Date(state.reminderDate);
+          if (state.reminderTime) {
+            const [hours, minutes] = state.reminderTime.split(':');
+            date.setHours(parseInt(hours), parseInt(minutes));
+          }
+          cleanedState.reminderDate = date.toISOString();
+        }
+
+        return cleanedState;
       });
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Errore durante il salvataggio");
-      }
+      // 3. Call Server Action
+      const resultStr = await createAnagrafica(payload, servicesPayload);
+      const result = JSON.parse(resultStr);
 
-      const savedData = await res.json();
-      console.log("Anagrafica salvata:", savedData);
+      console.log("Anagrafica creata:", result);
       alert("Dati salvati correttamente ✅");
 
-      // Eventuale reset form o redirect
-      // setFormData(initialFormData); 
-      // router.push("/dashboard");
+      // Redirect to the new anagrafica page
+      router.push(`/${structureId}/anagrafica/${result.id}`);
 
     } catch (err) {
       console.error("Errore submit anagrafica:", err);
-      alert("Errore durante il salvataggio ❌: " + err.message);
+      alert("Errore  durante il salvataggio ❌: " + err.message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -132,7 +195,7 @@ export default function AnagraficaForm({ params }) {
 
         <form onSubmit={handleSubmit} className="flex flex-col lg:flex-row lg:flex-wrap gap-4 w-full">
           {/* Each card section */}
-          <div className="w-full lg:w-[calc(50%-8px)] min-w-0"> {/* 50% width minus gap */}
+          <div className="w-full lg:w-[calc(50%-8px)] min-w-0">
             <Card className="shadow-sm gap-2">
               <CardHeader className="">
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -185,7 +248,7 @@ export default function AnagraficaForm({ params }) {
           </div>
 
           {/* 2. Nucleo Familiare */}
-          <div className="w-full lg:w-[calc(50%-8px)] min-w-0"> {/* 50% width minus gap */}
+          <div className="w-full lg:w-[calc(50%-8px)] min-w-0">
             <Card className="shadow-sm gap-2  h-full">
               <CardHeader className="gap-1">
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -227,7 +290,7 @@ export default function AnagraficaForm({ params }) {
           </div>
 
           {/* 3. Situazione Legale e Abitativa */}
-          <div className="w-full lg:w-[calc(50%-8px)] min-w-0"> {/* 50% width minus gap */}
+          <div className="w-full lg:w-[calc(50%-8px)] min-w-0">
             <Card className="shadow-sm gap-2  h-full">
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -307,7 +370,7 @@ export default function AnagraficaForm({ params }) {
           </div>
 
           {/* 4. Lavoro e Formazione */}
-          <div className="w-full lg:w-[calc(50%-8px)] min-w-0"> {/* 50% width minus gap */}
+          <div className="w-full lg:w-[calc(50%-8px)] min-w-0">
             <Card className="shadow-sm gap-2  h-full">
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -369,7 +432,7 @@ export default function AnagraficaForm({ params }) {
           </div>
 
           {/* 5. Vulnerabilità e Prospettive */}
-          <div className="w-full lg:w-[calc(50%-8px)] min-w-0"> {/* 50% width minus gap */}
+          <div className="w-full lg:w-[calc(50%-8px)] min-w-0">
             <Card className="shadow-sm gap-2  h-full">
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -429,7 +492,7 @@ export default function AnagraficaForm({ params }) {
           </div>
 
           {/* 6. Come ci hai conosciuto? */}
-          <div className="w-full lg:w-[calc(50%-8px)] min-w-0"> {/* 50% width minus gap */}
+          <div className="w-full lg:w-[calc(50%-8px)] min-w-0">
             <Card className="shadow-sm gap-2  h-full">
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -457,10 +520,178 @@ export default function AnagraficaForm({ params }) {
             </Card>
           </div>
 
+          {/* 7. PRIMO ACCESSO (NEW SECTION) */}
+          <div className="w-full min-w-0">
+            <Card className="shadow-sm border-blue-200 ring-1 ring-blue-100">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <span className="w-6 h-6 bg-teal-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                    7
+                  </span>
+                  Registra Primo Accesso & Documenti (Opzionale)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-2">
+                <Tabs defaultValue={AccessTypes[0].value} className="flex-1 flex flex-col overflow-hidden">
+                  <div className="mb-4 overflow-x-auto rounded-md bg-gray-100  border-b px-1">
+                    {/* <ScrollArea className="w-full whitespace-nowrap rounded-md border"> */}
+                    <TabsList className="flex w-max space-x-2 overflow-x-auto ">
+                      {AccessTypes.map((type) => {
+                        const isValid = isTypeValid(type.value);
+                        return (
+                          <TabsTrigger
+                            key={type.value}
+                            value={type.value}
+                            className={clsx(
+                              "data-[state=active]:bg-primary data-[state=active]:text-primary-foreground relative",
+                              isValid && "bg-lime-600/20 font-bold",
+                            )}
+                          >
+                            {type.label}
+                          </TabsTrigger>
+                        );
+                      })}
+                    </TabsList>
+                    {/*  </ScrollArea> */}
+                  </div>
+
+                  <div className="mt-2 text-sm text-gray-500 mb-4 px-1">
+                    Seleziona una o più categorie di accesso. Clicca sui tab per compilare i dettagli.
+                  </div>
+
+                  {AccessTypes.map((type) => {
+                    const state = accessState[type.value];
+                    const subCatOptions = type.subCategories || [];
+
+                    return (
+                      <TabsContent key={type.value} value={type.value} className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="flex flex-col gap-2">
+                            <CreateMultiCombobox
+                              label="Sottocategorie"
+                              values={state.subCategories}
+                              onChange={(val) => {
+                                handleAccessChange(type.value, "subCategories", val);
+                                if (!val.includes("Altro")) handleAccessChange(type.value, "altroText", "");
+                              }}
+                              options={subCatOptions}
+                              placeholder="Seleziona sottocategorie..."
+                            />
+                            {state.subCategories.includes("Altro") && (
+                              <div className="mt-2">
+                                <Label>Specifica Altro</Label>
+                                <Input
+                                  value={state.altroText}
+                                  onChange={(e) => handleAccessChange(type.value, "altroText", e.target.value)}
+                                  placeholder="Descrizione..."
+                                />
+                              </div>
+                            )}
+                          </div>
+
+                          {/*  {type.value === "legale" && (
+                            <div className="flex flex-col gap-2">
+                              <Label>Classificazione</Label>
+                              <RadioGroup
+                                value={state.classification}
+                                onValueChange={(v) => handleAccessChange(type.value, "classification", v)}
+                                className="flex flex-col gap-1"
+                              >
+                                {AccessClassifications.legale.map(c => (
+                                  <div key={c} className="flex items-center space-x-2">
+                                    <RadioGroupItem value={c} id={`lc-${c}`} />
+                                    <Label htmlFor={`lc-${c}`}>{c}</Label>
+                                  </div>
+                                ))}
+                              </RadioGroup>
+                            </div>
+                          )} */}
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Note aggiuntive</Label>
+                          <TiptapEditor
+                            content={state.content}
+                            onChange={(html) => handleAccessChange(type.value, "content", html)}
+                            placeholder="Inserisci dettagli..."
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Allegati</Label>
+                          <Dropzone
+                            onDrop={(files) => handleAccessChange(type.value, "files", [...state.files, ...files])}
+                            className="border border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:bg-gray-50"
+                          >
+                            <p className="text-muted-foreground">Clicca o trascina file qui per caricarli</p>
+                          </Dropzone>
+                          {state.files.length > 0 && (
+                            <div className="space-y-1">
+                              {state.files.map((f, i) => (
+                                <div key={i} className="flex justify-between items-center text-sm p-2 bg-gray-50 border rounded">
+                                  <span>{f.name}</span>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-red-500 h-6 px-2"
+                                    onClick={() => handleAccessChange(type.value, "files", state.files.filter((_, idx) => idx !== i))}
+                                  >
+                                    ×
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Reminder Section */}
+                        <div className="grid gap-2 border-t pt-4 mt-2">
+                          <Label className="text-base font-semibold">Promemoria (Opzionale)</Label>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <DatePicker
+                              label="Data Promemoria"
+                              value={state.reminderDate}
+                              onChange={(date) => handleAccessChange(type.value, "reminderDate", date)}
+                              fromYear={new Date().getFullYear()}
+                              toYear={new Date().getFullYear() + 5}
+                            />
+                            <div className="flex flex-col gap-2">
+                              <Label htmlFor={`time-${type.value}`} className="text-sm font-medium">Ora</Label>
+                              <Input
+                                id={`time-${type.value}`}
+                                type="time"
+                                value={state.reminderTime}
+                                onChange={(e) => handleAccessChange(type.value, "reminderTime", e.target.value)}
+                                disabled={!state.reminderDate}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </TabsContent>
+                    );
+                  })}
+                </Tabs>
+              </CardContent>
+            </Card>
+          </div>
+
           {/* Submit Button */}
           <div className="flex justify-center pt-2 col-span-2 w-full">
-            <Button type="submit" size="lg" className="w-full md:w-auto min-w-[200px] h-12 text-base font-medium">
-              💾 Salva Anagrafica
+            <Button
+              type="submit"
+              size="lg"
+              disabled={isSaving}
+              className="w-full md:w-auto min-w-[200px] h-12 text-base font-medium"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Salvataggio...
+                </>
+              ) : (
+                <>💾 Salva Anagrafica e Accessi</>
+              )}
             </Button>
           </div>
 

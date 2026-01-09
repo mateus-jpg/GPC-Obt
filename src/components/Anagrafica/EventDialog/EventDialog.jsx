@@ -13,11 +13,11 @@ import {
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Combobox, CreateMultiCombobox } from "@/components/form/Combobox";
-import { EventTypes } from "./EventTypes"; 
+import { AccessTypes } from "../AccessDialog/AccessTypes";
 import clsx from "clsx";
 import { TiptapEditor } from "@/components/tiptap-editor";
 import { Dropzone } from "@/components/ui/shadcn-io/dropzone";
-import { Calendar } from "@/components/ui/calendar"; 
+import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { IconCalendarPlus } from "@tabler/icons-react";
 import { createEventAction } from "@/actions/anagrafica/events";
@@ -25,25 +25,28 @@ import { createEventAction } from "@/actions/anagrafica/events";
 
 export default function EventDialog({ anagraficaId, structureId }) {
   const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [selectedType, setSelectedType] = useState("");
   const [selectedSubcategories, setSelectedSubcategories] = useState([]);
   const [altroText, setAltroText] = useState("");
   const [files, setFiles] = useState([]);
 
-  const [dateTime, setDateTime] = useState(undefined); 
+  const [dateTime, setDateTime] = useState(undefined);
 
-  const currentType = EventTypes.find((t) => t.label === selectedType);
+  const currentType = AccessTypes.find((t) => t.label === selectedType);
   const [subCategories, setSubCategories] = useState(
     currentType ? currentType.subCategories : []
   );
 
   const isFormValid =
+    !!title &&
     !!selectedType &&
     selectedSubcategories.length > 0 &&
     (!selectedSubcategories.includes("Altro") || altroText.trim() !== "");
 
   const resetForm = () => {
+    setTitle("");
     setContent("");
     setSelectedType("");
     setSelectedSubcategories([]);
@@ -63,21 +66,22 @@ export default function EventDialog({ anagraficaId, structureId }) {
 
     try {
       const payload = {
-        anagraficaId, 
+        title,
+        anagraficaId,
         tipoEvento: selectedType,
         sottocategorie: selectedSubcategories,
         altro: selectedSubcategories.includes("Altro") ? altroText.trim() : undefined,
         note: content,
-        files, 
+        files,
         dataOra: dateTime?.toISOString() || undefined,
         structureId,
       };
 
-      
+
       const result = await createEventAction(payload);
 
 
-      
+
       setOpen(false);
       resetForm();
     } catch (error) {
@@ -89,7 +93,7 @@ export default function EventDialog({ anagraficaId, structureId }) {
     setSelectedType(value || "");
     setSelectedSubcategories([]);
     setAltroText("");
-    const newType = EventTypes.find((t) => t.label === value);
+    const newType = AccessTypes.find((t) => t.label === value);
     setSubCategories(newType ? newType.subCategories : []);
   };
 
@@ -101,28 +105,41 @@ export default function EventDialog({ anagraficaId, structureId }) {
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-4xl min-w-4xl">
+      <DialogContent className="max-w-8xl min-w-7xl">
         <DialogHeader>
           <DialogTitle>Registra nuovo evento</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="grid gap-6 py-4">
-          {/* STEP 1 — Tipologia */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Colonna 1: Tipologia evento */}
-            <div className="grid gap-2">
-              <Combobox
-                label="Tipologia evento"
-                value={selectedType}
-                onChange={handleTypeChange}
-                options={EventTypes.map((t) => t.label)}
-                placeholder="Seleziona la tipologia..."
-              />
+
+            {/* Colonna 1: Titolo e Tipologia */}
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="title">Titolo</Label>
+                <Input
+                  id="title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Inserisci il titolo dell'evento..."
+                  required
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Combobox
+                  label="Tipologia (Categorie Accessi)"
+                  value={selectedType}
+                  onChange={handleTypeChange}
+                  options={AccessTypes.map((t) => t.label)}
+                  placeholder="Seleziona la tipologia..."
+                />
+              </div>
             </div>
 
             {/* Colonna 2: Data e ora */}
             <div className="grid gap-2">
-              <Label>Data e ora (opzionale)</Label>
+              <Label>Data e Ora Scadenza (opzionale)</Label>
               <div className="flex gap-2">
                 {/* Calendar */}
                 <Popover>
