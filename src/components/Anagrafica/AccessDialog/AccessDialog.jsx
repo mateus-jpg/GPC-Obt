@@ -23,6 +23,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import DatePicker from "@/components/form/DatePicker";
 
+const convertFileToBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = (error) => reject(error);
+  });
+};
+
 export default function AccessDialog({ anagraficaId, structureId }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -100,7 +109,7 @@ export default function AccessDialog({ anagraficaId, structureId }) {
     setLoading(true);
     try {
       debugger;
-      const servicesPayload = validTypes.map((type) => {
+      const servicesPayload = await Promise.all(validTypes.map(async (type) => {
         const state = formsState[type.value];
 
         const cleanedState = {};
@@ -112,10 +121,16 @@ export default function AccessDialog({ anagraficaId, structureId }) {
         if (state.classification) cleanedState.classificazione = state.classification;
         if (state.referralEntity) cleanedState.enteRiferimento = state.referralEntity;
         if (state.files.length > 0) {
-          cleanedState.files = state.files.map(f => ({
-            ...f,
-            creationDate: f.creationDate instanceof Date ? f.creationDate.toISOString() : f.creationDate,
-            expirationDate: f.expirationDate instanceof Date ? f.expirationDate.toISOString() : f.expirationDate,
+          cleanedState.files = await Promise.all(state.files.map(async (f) => {
+            const base64 = await convertFileToBase64(f.file);
+            return {
+              name: f.name,
+              creationDate: f.creationDate instanceof Date ? f.creationDate.toISOString() : f.creationDate,
+              expirationDate: f.expirationDate instanceof Date ? f.expirationDate.toISOString() : f.expirationDate,
+              base64,
+              type: f.file.type,
+              size: f.file.size
+            };
           }));
         }
         if (state.reminderDate) {
@@ -127,9 +142,8 @@ export default function AccessDialog({ anagraficaId, structureId }) {
           cleanedState.reminderDate = date.toISOString();
         }
 
-        debugger;
         return cleanedState;
-      });
+      }));
 
       const payload = {
         anagraficaId,

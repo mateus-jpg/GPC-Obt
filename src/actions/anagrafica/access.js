@@ -16,7 +16,7 @@ function arraysIntersect(a = [], b = []) {
   return (b || []).some(x => set.has(x));
 }
 
-async function createAccessInternal({ anagraficaId, services, structureId, userUid, structureIds }) {
+export async function createAccessInternal({ anagraficaId, services, structureId, userUid, structureIds }) {
   const accessRef = adminDb.collection('accessi').doc();
   const accessId = accessRef.id;
 
@@ -25,38 +25,58 @@ async function createAccessInternal({ anagraficaId, services, structureId, userU
 
     if (svc.files && svc.files.length > 0) {
       for (const fileItem of svc.files) {
-        // Handle both raw File objects (legacy) and new object structure with metadata
+        // Handle both raw File objects (legacy/FormData) and new object structure with metadata/base64
         let file = fileItem;
         let metadata = {
-          nome: null,
-          dataCreazione: null,
-          dataScadenza: null
+          nome: fileItem.name,
+          dataCreazione: fileItem.creationDate,
+          dataScadenza: fileItem.expirationDate
         };
+        let buffer;
+        let originalName = fileItem.name;
+        let mimeType = fileItem.type;
+        let size = fileItem.size;
 
-        if (fileItem.file && typeof fileItem.file.arrayBuffer === 'function') {
-          // New structure: { file, name, creationDate, expirationDate }
-          file = fileItem.file;
-          metadata = {
-            nome: fileItem.name,
-            dataCreazione: fileItem.creationDate,
-            dataScadenza: fileItem.expirationDate
-          };
+        if (fileItem.base64) {
+          // Handle Base64
+          const matches = fileItem.base64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+          if (matches && matches.length === 3) {
+            mimeType = matches[1];
+            buffer = Buffer.from(matches[2], 'base64');
+          } else {
+            // Fallback if no prefix
+            buffer = Buffer.from(fileItem.base64, 'base64');
+          }
+        } else if (fileItem.file && typeof fileItem.file.arrayBuffer === 'function') {
+          // Handle File object (if supported via FormData or direct access)
+          const arrayBuffer = await fileItem.file.arrayBuffer();
+          buffer = Buffer.from(arrayBuffer);
+          originalName = fileItem.file.name;
+          mimeType = fileItem.file.type;
+          size = fileItem.file.size;
+        } else if (typeof fileItem.arrayBuffer === 'function') {
+          // Direct File object
+          const arrayBuffer = await fileItem.arrayBuffer();
+          buffer = Buffer.from(arrayBuffer);
+          originalName = fileItem.name;
+          mimeType = fileItem.type;
+          size = fileItem.size;
         }
 
-        const arrayBuffer = await file.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
+        if (!buffer) continue;
+
         // Use a unique name for storage to avoid collisions, but keep original name in metadata
-        const fileNameSanitized = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+        const fileNameSanitized = originalName.replace(/[^a-zA-Z0-9.-]/g, "_");
         const storagePath = `files/${anagraficaId}/accessi/${accessId}/${index}_${randomUUID()}_${fileNameSanitized}`;
 
         const fileRef = adminStorage.bucket().file(storagePath);
-        await fileRef.save(buffer, { contentType: file.type, resumable: false });
+        await fileRef.save(buffer, { contentType: mimeType, resumable: false });
 
         uploadedFiles.push({
-          nome: metadata.nome || file.name,
-          nomeOriginale: file.name,
-          tipo: file.type,
-          dimensione: file.size,
+          nome: metadata.nome || originalName,
+          nomeOriginale: originalName,
+          tipo: mimeType,
+          dimensione: size,
           path: storagePath,
           dataCreazione: metadata.dataCreazione ? new Date(metadata.dataCreazione).toISOString() : new Date().toISOString(),
           dataScadenza: metadata.dataScadenza ? new Date(metadata.dataScadenza).toISOString() : null,

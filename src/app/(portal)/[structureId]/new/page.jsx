@@ -25,6 +25,15 @@ import { Dropzone } from "@/components/ui/shadcn-io/dropzone";
 import { TiptapEditor } from "@/components/tiptap-editor";
 import { Loader2 } from "lucide-react";
 
+const convertFileToBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = (error) => reject(error);
+  });
+};
+
 export default function AnagraficaForm({ params }) {
   const { structureId } = React.use(params);
   const { user } = useAuth();
@@ -139,7 +148,7 @@ export default function AnagraficaForm({ params }) {
 
       // 2. Prepare Services (Access) Payload
       const validTypes = AccessTypes.filter((t) => isTypeValid(t.value));
-      const servicesPayload = validTypes.map((type) => {
+      const servicesPayload = await Promise.all(validTypes.map(async (type) => {
         const state = accessState[type.value];
         const cleanedState = {
           tipoAccesso: type.label,
@@ -150,7 +159,21 @@ export default function AnagraficaForm({ params }) {
         if (state.content.trim() !== "") cleanedState.note = state.content.trim();
         if (state.classification) cleanedState.classificazione = state.classification;
         if (state.referralEntity) cleanedState.enteRiferimento = state.referralEntity;
-        if (state.files.length > 0) cleanedState.files = state.files; // Array of File objects
+
+        if (state.files.length > 0) {
+          cleanedState.files = await Promise.all(state.files.map(async (f) => {
+            const base64 = await convertFileToBase64(f.file);
+            return {
+              name: f.name,
+              creationDate: f.creationDate instanceof Date ? f.creationDate.toISOString() : f.creationDate,
+              expirationDate: f.expirationDate instanceof Date ? f.expirationDate.toISOString() : f.expirationDate,
+              base64,
+              type: f.file.type,
+              size: f.file.size
+            };
+          }));
+        }
+
         if (state.reminderDate) {
           const date = new Date(state.reminderDate);
           if (state.reminderTime) {
@@ -161,12 +184,16 @@ export default function AnagraficaForm({ params }) {
         }
 
         return cleanedState;
-      });
+      }));
 
       // 3. Call Server Action
+      debugger;
       const resultStr = await createAnagrafica(payload, servicesPayload);
       const result = JSON.parse(resultStr);
-
+      if (result.error) {
+        alert("Errore  durante il salvataggio ❌: " + result.message);
+        return;
+      }
       console.log("Anagrafica creata:", result);
       alert("Dati salvati correttamente ✅");
 
@@ -620,25 +647,86 @@ export default function AnagraficaForm({ params }) {
                         <div className="space-y-2">
                           <Label>Allegati</Label>
                           <Dropzone
-                            onDrop={(files) => handleAccessChange(type.value, "files", [...state.files, ...files])}
+                            onDrop={(acceptedFiles) => {
+                              const newFiles = acceptedFiles.map((file) => ({
+                                file,
+                                fileName: file.name,
+                                name: file.name,
+                                creationDate: new Date(),
+                                expirationDate: null,
+                              }));
+                              handleAccessChange(type.value, "files", [...state.files, ...newFiles]);
+                            }}
                             className="border border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:bg-gray-50"
                           >
                             <p className="text-muted-foreground">Clicca o trascina file qui per caricarli</p>
                           </Dropzone>
                           {state.files.length > 0 && (
-                            <div className="space-y-1">
-                              {state.files.map((f, i) => (
-                                <div key={i} className="flex justify-between items-center text-sm p-2 bg-gray-50 border rounded">
-                                  <span>{f.name}</span>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-red-500 h-6 px-2"
-                                    onClick={() => handleAccessChange(type.value, "files", state.files.filter((_, idx) => idx !== i))}
-                                  >
-                                    ×
-                                  </Button>
+                            <div className="mt-4 space-y-3">
+                              {state.files.map((fileObj, idx) => (
+                                <div
+                                  key={idx}
+                                  className="border rounded-md p-3 bg-muted/30 grid gap-3"
+                                >
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-sm font-medium truncate max-w-[80%]">
+                                      {fileObj.file.name}
+                                    </span>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-8 text-destructive hover:text-destructive/90"
+                                      onClick={() => {
+                                        const newFiles = state.files.filter((_, i) => i !== idx);
+                                        handleAccessChange(type.value, "files", newFiles);
+                                      }}
+                                    >
+                                      ×
+                                    </Button>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div className="space-y-1">
+                                      <Label htmlFor={`file-name-${type.value}-${idx}`} className="text-xs">
+                                        Nome Documento
+                                      </Label>
+                                      <Input
+                                        id={`file-name-${type.value}-${idx}`}
+                                        value={fileObj.name}
+                                        onChange={(e) => {
+                                          const newFiles = [...state.files];
+                                          newFiles[idx] = { ...newFiles[idx], name: e.target.value };
+                                          handleAccessChange(type.value, "files", newFiles);
+                                        }}
+                                        className="h-9"
+                                        placeholder="Nome del documento"
+                                      />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <DatePicker
+                                        label="Data Doc."
+                                        value={fileObj.creationDate}
+                                        onChange={(date) => {
+                                          const newFiles = [...state.files];
+                                          newFiles[idx] = { ...newFiles[idx], creationDate: date };
+                                          handleAccessChange(type.value, "files", newFiles);
+                                        }}
+                                        fromYear={2000}
+                                      />
+                                      <DatePicker
+                                        label="Scadenza (Opz.)"
+                                        value={fileObj.expirationDate}
+                                        onChange={(date) => {
+                                          const newFiles = [...state.files];
+                                          newFiles[idx] = { ...newFiles[idx], expirationDate: date };
+                                          handleAccessChange(type.value, "files", newFiles);
+                                        }}
+                                        fromYear={new Date().getFullYear()}
+                                        toYear={new Date().getFullYear() + 10}
+                                      />
+                                    </div>
+                                  </div>
                                 </div>
                               ))}
                             </div>

@@ -3,80 +3,12 @@
 import admin from '@/lib/firebase/firebaseAdmin';
 import { headers } from 'next/headers';
 import { randomUUID } from 'crypto';
+import { createAccessInternal } from './access';
 
 const adminDb = admin.firestore();
 const adminStorage = admin.storage();
 
-async function createAccessInternal({ anagraficaId, services, structureId, userUid, structureIds }) {
-  const accessRef = adminDb.collection('accessi').doc();
-  const accessId = accessRef.id;
 
-  const processedServices = await Promise.all(services.map(async (svc, index) => {
-    const uploadedFiles = [];
-
-    if (svc.files && svc.files.length > 0) {
-      for (const a of svc.files) {
-        const arrayBuffer = await a.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        const storagePath = `files/${anagraficaId}/accessi/${accessId}/${index}_${a.filename}`;
-
-        const fileRef = adminStorage.bucket().file(storagePath);
-        await fileRef.save(buffer, { contentType: a.type, resumable: false });
-
-        uploadedFiles.push({
-          filename: a.filename,
-          nome: a.name,
-          tipo: a.type,
-          dimensione: a.size,
-          path: storagePath,
-        });
-      }
-    }
-
-    let reminderId = null;
-    if (svc.reminderDate) {
-      const reminderRef = adminDb.collection('eventi').doc();
-      reminderId = reminderRef.id;
-
-      await reminderRef.set({
-        anagraficaId,
-        structureId,
-        accessId,
-        serviceType: svc.tipoAccesso,
-        date: svc.reminderDate,
-        note: svc.note || '',
-        createdBy: userUid,
-        createdAt: new Date().toISOString(),
-        status: 'pending',
-        linkedToAccess: true
-      });
-    }
-
-    return {
-      tipoAccesso: svc.tipoAccesso || null,
-      sottoCategorie: svc.sottoCategorie ?? null,
-      altro: svc.altro ?? null,
-      note: svc.note?.trim() || null,
-      classificazione: svc.classificazione ?? null,
-      enteRiferimento: svc.enteRiferimento ?? null,
-      files: uploadedFiles || [],
-      reminderDate: svc.reminderDate ?? null,
-      reminderId: reminderId ?? null,
-    };
-  }));
-
-  const accessData = {
-    anagraficaId,
-    services: processedServices,
-    createdByStructure: structureId,
-    createdBy: userUid,
-    createdAt: new Date().toISOString(),
-    structureIds,
-  };
-
-  await accessRef.set(accessData);
-  return { accessId, accessData };
-}
 
 /**
  * Crea una nuova anagrafica (con eventuali accessi e file)
@@ -136,14 +68,26 @@ export async function createAnagrafica(body, services = []) {
     }
 
     // 5. SERVICES & FILE PROCESSING
+    console.log(services)
     if (services && services.length > 0) {
-      await createAccessInternal({
-        anagraficaId,
-        services,
-        structureId: body.registeredByStructure,
-        userUid,
-        structureIds: docData.structureIds,
-      });
+      try {
+
+        await createAccessInternal({
+          anagraficaId,
+          services,
+          structureId: body.registeredByStructure,
+          userUid,
+          structureIds: docData.structureIds,
+        });
+      } catch (Error) {
+        console.error(
+          "Error creating Acesso", Error
+        )
+        return JSON.stringify({
+          error: true,
+          message: Error.message
+        }, null, 2);
+      }
     }
 
     return JSON.stringify({ id: anagraficaId });
