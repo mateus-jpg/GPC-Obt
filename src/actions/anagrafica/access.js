@@ -267,3 +267,51 @@ export async function getAccessAction(anagraficaId) {
     accessi,
   };
 }
+
+export async function getAccessFileUrl({ anagraficaId, filePath }) {
+  const hdr = await headers();
+  const userUid = hdr.get('x-user-uid');
+  if (!userUid) throw new Error('Unauthorized');
+
+  if (!anagraficaId || !filePath) throw new Error('Missing parameters');
+
+  // Security check: ensure filePath belongs to the anagrafica
+  if (!filePath.startsWith(`files/${anagraficaId}/`)) {
+    throw new Error('Invalid file path for this anagrafica');
+  }
+
+  // Permission check
+  const anagraficaRef = adminDb.collection('anagrafica').doc(anagraficaId);
+  const anagraficaSnap = await anagraficaRef.get();
+  if (!anagraficaSnap.exists) throw new Error('Anagrafica not found');
+
+  const anagraficaData = anagraficaSnap.data() || {};
+  const allowedStructures =
+    anagraficaData.canBeAccessedBy || anagraficaData.structureIds || [];
+
+  let operatorDoc = await adminDb.collection('operators').doc(userUid).get();
+  if (!operatorDoc.exists) {
+    operatorDoc = await adminDb.collection('users').doc(userUid).get();
+  }
+  if (!operatorDoc.exists) throw new Error('Operator not found');
+
+  const operatorData = operatorDoc.data() || {};
+  const operatorStructures =
+    operatorData.structureIds || operatorData.structureId || [];
+
+  if (!arraysIntersect(operatorStructures, allowedStructures)) {
+    throw new Error('Forbidden: operator not allowed for this anagrafica');
+  }
+
+  // Generate Signed URL
+  // Valid for 1 hour
+  const [url] = await adminStorage
+    .bucket()
+    .file(filePath)
+    .getSignedUrl({
+      action: 'read',
+      expires: Date.now() + 1000 * 60 * 60, // 1 hour
+    });
+
+  return { success: true, url };
+}

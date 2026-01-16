@@ -161,20 +161,29 @@ export default function AccessDialog({ anagraficaId, structureId }) {
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-6xl min-w-3xl min-h-4xl">
-        <DialogHeader>
+      <DialogContent className="fixed z-50 grid gap-4 bg-background shadow-lg duration-200 
+        w-full h-[100dvh] max-w-none rounded-none border-0 p-0 
+        top-0 left-0 translate-x-0 translate-y-0 
+        data-[state=open]:slide-in-from-bottom-100 data-[state=closed]:slide-out-to-bottom-100
+        sm:top-[50%] sm:left-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] 
+        sm:w-full sm:max-w-6xl sm:h-auto sm:rounded-lg sm:border sm:p-6
+        sm:data-[state=open]:zoom-in-95 sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:slide-in-from-top-0
+      ">
+        <DialogHeader className="p-4 sm:p-0">
           <DialogTitle>Registra nuovo accesso </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex-1 w-full flex flex-col overflow-hidden">
-          <AccessServicesForm
-            state={formsState}
-            onChange={updateField}
-            showClassification={true}
-            showReferralEntity={true}
-          />
+          <div className="flex-1 flex flex-col overflow-hidden px-4 sm:px-0">
+            <AccessServicesForm
+              state={formsState}
+              onChange={updateField}
+              showClassification={true}
+              showReferralEntity={true}
+            />
+          </div>
 
-          <DialogFooter className="mt-4">
+          <DialogFooter className="mt-0 p-4 border-t sm:border-0 sm:p-0 sm:mt-4">
             <DialogClose asChild>
               <Button type="button" variant="outline" disabled={loading}>
                 Annulla

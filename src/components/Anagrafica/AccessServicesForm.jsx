@@ -59,7 +59,7 @@ export default function AccessServicesForm({
                 if (!typeState) return null;
 
                 return (
-                    <TabsContent key={type.value} value={type.value} className="space-y-4 mt-0">
+                    <TabsContent key={type.value} value={type.value} className="space-y-4 mt-0 flex-1 overflow-y-auto p-1">
                         <div className={clsx("grid gap-4 align-top grid-cols-1 md:grid-cols-2")}>
                             {/* Subcategories */}
                             <div className="flex flex-col gap-2 min-w-0">

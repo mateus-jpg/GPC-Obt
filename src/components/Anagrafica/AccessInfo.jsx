@@ -18,6 +18,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
+import { getAccessFileUrl } from "@/actions/anagrafica/access";
+
 export default function AccessInfo({ accesses }) {
   if (!accesses) return null;
 
@@ -32,6 +34,7 @@ export default function AccessInfo({ accesses }) {
           ...svc,
           // Merge parent info
           accessId: acc.id,
+          anagraficaId: acc.anagraficaId,
           createdAt: acc.createdAt,
           createdBy: acc.createdBy,
           createdByEmail: acc.createdByEmail,
@@ -45,6 +48,20 @@ export default function AccessInfo({ accesses }) {
     setData(flatList);
     console.log("Accesses received and flattened:", flatList);
   }, [accesses]);
+
+  const handleDownloadFile = async (anagraficaId, file) => {
+    try {
+      const response = await getAccessFileUrl({ anagraficaId, filePath: file.path });
+      if (response.success && response.url) {
+        window.open(response.url, '_blank');
+      } else {
+        alert("Impossibile recuperare il file.");
+      }
+    } catch (error) {
+      console.error("Download error:", error);
+      alert("Errore durante il download del file.");
+    }
+  };
 
   const columns = useMemo(
     () => [
@@ -87,8 +104,10 @@ export default function AccessInfo({ accesses }) {
       {
         accessorKey: "files",
         header: "File",
-        Cell: ({ cell }) => {
+        Cell: ({ cell, row }) => {
           const files = cell.getValue() || [];
+          const { anagraficaId } = row.original;
+
           if (!Array.isArray(files) || files.length === 0) return "-";
           return (
             <div className="flex flex-col gap-1">
@@ -96,17 +115,18 @@ export default function AccessInfo({ accesses }) {
                 <TooltipProvider key={i}>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Link
-                        href={`https://storage.googleapis.com/${process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}/${f.path}`}
-                        target="_blank"
-                        className="flex items-center gap-1 text-blue-600 hover:underline text-sm"
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadFile(anagraficaId, f)}
+                        className="flex items-center gap-1 text-blue-600 hover:underline text-sm bg-transparent border-0 cursor-pointer p-0"
                       >
                         <FileIcon className="w-4 h-4" />
                         {f.nome.length > 15 ? f.nome.slice(0, 15) + "..." : f.nome}
-                      </Link>
+                      </button>
                     </TooltipTrigger>
                     <TooltipContent className="max-w-xs">
                       <div className="text-xs space-y-1">
+                        <p><strong>Nome:</strong> {f.nome}</p>
                         <p><strong>Nome Originale:</strong> {f.nomeOriginale || "-"}</p>
                         <p><strong>Creato il:</strong> {f.dataCreazione ? formatDate(f.dataCreazione) : "-"}</p>
                         <p><strong>Scadenza:</strong> {f.dataScadenza ? formatDate(f.dataScadenza) : "-"}</p>
