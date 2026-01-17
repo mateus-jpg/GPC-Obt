@@ -1,53 +1,27 @@
 'use server';
 
 import admin from '@/lib/firebase/firebaseAdmin';
-import { headers } from 'next/headers';
-import { randomUUID } from 'crypto';
+import { requireUser, verifyUserPermissions } from '@/utils/server-auth';
 import { createAccessInternal } from './access';
+import { headers } from 'next/headers';
 
 const adminDb = admin.firestore();
-const adminStorage = admin.storage();
-
-
 
 /**
  * Crea una nuova anagrafica (con eventuali accessi e file)
  */
 export async function createAnagrafica(body, services = []) {
   try {
-    // 1. AUTHENTICATION & HEADER CHECK
-    let userUid;
-    try {
-      const hdr = await headers();
-      userUid = hdr.get('x-user-uid');
-      if (!userUid) throw new Error('Missing x-user-uid header');
-    } catch (authErr) {
-      console.error('[AUTH ERROR]:', authErr.message);
-      throw new Error(`Unauthorized: ${authErr.message}`);
-    }
+    // 1. AUTHENTICATION
+    const { userUid } = await requireUser();
 
-    // 2. USER/OPERATOR VALIDATION
-    let operatorData;
-    try {
-      let operatorDoc = await adminDb.collection('operators').doc(userUid).get();
-      if (!operatorDoc.exists) {
-        operatorDoc = await adminDb.collection('users').doc(userUid).get();
-      }
-      if (!operatorDoc.exists) throw new Error(`User ${userUid} not found in operators or users`);
+    // 2. PERMISSION CHECK (User must belong to the registering structure)
+    await verifyUserPermissions({
+      userUid,
+      structureId: body.registeredByStructure
+    });
 
-      operatorData = operatorDoc.data();
-    } catch (dbErr) {
-      console.error('[DB USER LOOKUP ERROR]:', dbErr.message);
-      throw new Error(`User Verification Failed: ${dbErr.message}`);
-    }
-
-    // 3. PERMISSION CHECK
-    const operatorStructures = operatorData.structureIds || operatorData.structureId || [];
-    if (!body.registeredByStructure || !operatorStructures.includes(body.registeredByStructure)) {
-      throw new Error(`Forbidden: Structure mismatch for user ${userUid}`);
-    }
-
-    // 4. ANAGRAFICA DOCUMENT CREATION
+    // 3. ANAGRAFICA DOCUMENT CREATION
     let anagraficaId;
     let docData;
     try {
@@ -67,11 +41,9 @@ export async function createAnagrafica(body, services = []) {
       throw new Error(`Failed to create Anagrafica record: ${createErr.message}`);
     }
 
-    // 5. SERVICES & FILE PROCESSING
-    console.log(services)
+    // 4. SERVICES & FILE PROCESSING
     if (services && services.length > 0) {
       try {
-
         await createAccessInternal({
           anagraficaId,
           services,
@@ -80,9 +52,7 @@ export async function createAnagrafica(body, services = []) {
           structureIds: docData.structureIds,
         });
       } catch (Error) {
-        console.error(
-          "Error creating Acesso", Error
-        )
+        console.error("Error creating Acesso", Error);
         return JSON.stringify({
           error: true,
           message: Error.message
@@ -93,10 +63,7 @@ export async function createAnagrafica(body, services = []) {
     return JSON.stringify({ id: anagraficaId });
 
   } catch (globalErr) {
-    // This catches any unhandled errors and the re-thrown errors from above
     console.error('[CREATE_ANAGRAFICA FATAL]:', globalErr.stack);
-
-    // Return a structured error for the frontend
     return JSON.stringify({
       error: true,
       message: globalErr.message
@@ -108,54 +75,41 @@ export async function createAnagrafica(body, services = []) {
  * Recupera l’anagrafica
  */
 export async function getAnagrafica(anagraficaId) {
-  const hdr = headers();
-  const userUid = hdr.get('x-user-uid');
-  if (!userUid) throw new Error('Unauthorized');
+  const { userUid } = await requireUser();
 
   const anagraficaRef = adminDb.collection('anagrafica').doc(anagraficaId);
   const anagraficaSnap = await anagraficaRef.get();
   if (!anagraficaSnap.exists) throw new Error('Anagrafica not found');
 
   const anagraficaData = { id: anagraficaSnap.id, ...anagraficaSnap.data() };
+  const allowedStructures = anagraficaData.canBeAccessedBy || [];
 
-  // Recupera le structure dell’utente
-  let userDoc = await adminDb.collection('operators').doc(userUid).get();
-  if (!userDoc.exists) {
-    userDoc = await adminDb.collection('users').doc(userUid).get();
-  }
-  if (!userDoc.exists) throw new Error('User not found');
-
-  const userData = userDoc.data();
-  const userStructures = userData.structureIds || [];
-
-  // Controllo accesso
-  const canBeAccessedBy = anagraficaData.canBeAccessedBy || [];
-  const hasAccess = canBeAccessedBy.some((s) => userStructures.includes(s));
-  if (!hasAccess) throw new Error('Forbidden: no access to this anagrafica');
+  // Check access
+  await verifyUserPermissions({
+    userUid,
+    allowedStructures
+  });
 
   return JSON.stringify(anagraficaData);
 }
 
 
 export async function updateAnagrafica(anagraficaId, body, structureId) {
-  const hdr = headers();
-  const userUid = hdr.get('x-user-uid');
+  const { userUid, headers: hdr } = await requireUser();
   const userMail = hdr.get('x-user-mail');
-  if (!userUid) throw new Error('Unauthorized');
 
   const anagraficaRef = adminDb.collection('anagrafica').doc(anagraficaId);
   const anagraficaSnap = await anagraficaRef.get();
   if (!anagraficaSnap.exists) throw new Error('Anagrafica not found');
 
   const anagraficaData = anagraficaSnap.data();
+  const allowedStructures = anagraficaData.canBeAccessedBy || [];
 
-  let userDoc = await adminDb.collection('operators').doc(userUid).get();
-  if (!userDoc.exists) throw new Error('User not found');
-  const userStructures = userDoc.data().structureIds || [];
-  const canBeAccessedBy = anagraficaData.canBeAccessedBy || [];
-  if (!canBeAccessedBy.some((s) => userStructures.includes(s))) {
-    throw new Error('Forbidden: no access to update this anagrafica');
-  }
+  // Check access
+  await verifyUserPermissions({
+    userUid,
+    allowedStructures
+  });
 
   await anagraficaRef.update({
     ...body,
@@ -173,24 +127,20 @@ export async function updateAnagrafica(anagraficaId, body, structureId) {
  * Soft delete dell’anagrafica
  */
 export async function deleteAnagrafica(anagraficaId) {
-  const hdr = headers();
-  const userUid = hdr.get('x-user-uid');
-  if (!userUid) throw new Error('Unauthorized');
+  const { userUid } = await requireUser();
 
   const anagraficaRef = adminDb.collection('anagrafica').doc(anagraficaId);
   const anagraficaSnap = await anagraficaRef.get();
   if (!anagraficaSnap.exists) throw new Error('Anagrafica not found');
 
   const anagraficaData = anagraficaSnap.data();
+  const allowedStructures = anagraficaData.canBeAccessedBy || [];
 
-  // Controllo accesso
-  let userDoc = await adminDb.collection('users').doc(userUid).get();
-  if (!userDoc.exists) throw new Error('User not found');
-  const userStructures = userDoc.data().structureIds || [];
-  const canBeAccessedBy = anagraficaData.canBeAccessedBy || [];
-  if (!canBeAccessedBy.some((s) => userStructures.includes(s))) {
-    throw new Error('Forbidden: no access to delete this anagrafica');
-  }
+  // Check access
+  await verifyUserPermissions({
+    userUid,
+    allowedStructures
+  });
 
   await anagraficaRef.update({
     deletedAt: new Date(),

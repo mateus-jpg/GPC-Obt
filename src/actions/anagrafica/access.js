@@ -4,17 +4,10 @@ import { headers } from 'next/headers';
 import admin from '@/lib/firebase/firebaseAdmin';
 import { randomUUID } from 'crypto';
 import { stripHtml } from '@/utils/htmlSanitizer';
+import { requireUser, verifyUserPermissions } from '@/utils/server-auth';
 
 const adminDb = admin.firestore();
 const adminStorage = admin.storage();
-
-/**
- * Helper: controlla se due array hanno intersezione
- */
-function arraysIntersect(a = [], b = []) {
-  const set = new Set(a || []);
-  return (b || []).some(x => set.has(x));
-}
 
 export async function createAccessInternal({ anagraficaId, services, structureId, userUid, structureIds }) {
   const accessRef = adminDb.collection('accessi').doc();
@@ -130,20 +123,16 @@ export async function createAccessInternal({ anagraficaId, services, structureId
 }
 
 export async function createAccessAction(payload) {
-  const hdr = await headers();
-  const userUid = hdr.get('x-user-uid');
-  const userEmail = hdr.get('x-user-email');
-  if (!userUid) throw new Error('Unauthorized');
+  const { userUid } = await requireUser();
 
   const {
     anagraficaId,
-    services = [], // Array of { tipoAccesso, sottoCategorie, altro, note, files, classificazione, enteRiferimento }
+    services = [],
     structureId,
   } = payload;
 
   console.log('createAccessAction payload:', payload);
   if (!anagraficaId || services.length === 0) throw new Error('Missing required fields');
-
 
   const anagraficaRef = adminDb.collection('anagrafica').doc(anagraficaId);
   const anagraficaSnap = await anagraficaRef.get();
@@ -152,20 +141,10 @@ export async function createAccessAction(payload) {
   const anagraficaData = anagraficaSnap.data() || {};
   const allowedStructures = anagraficaData.canBeAccessedBy || anagraficaData.structureIds || [];
 
+  // Check if User has access to Anagrafica
+  await verifyUserPermissions({ userUid, allowedStructures });
 
-  let operatorDoc = await adminDb.collection('operators').doc(userUid).get();
-  if (!operatorDoc.exists) {
-    operatorDoc = await adminDb.collection('users').doc(userUid).get();
-  }
-  if (!operatorDoc.exists) throw new Error('Operator not found');
-
-  const operatorData = operatorDoc.data() || {};
-  const operatorStructures = operatorData.structureIds || operatorData.structureId || [];
-
-
-  if (!arraysIntersect(operatorStructures, allowedStructures)) {
-    throw new Error('Forbidden: operator not allowed for this anagrafica');
-  }
+  // Additional check: The structureId used for creation must be one of the allowed structures
   if (structureId && !allowedStructures.includes(structureId)) {
     throw new Error('Forbidden: structureId not allowed for this anagrafica');
   }
@@ -182,37 +161,18 @@ export async function createAccessAction(payload) {
 }
 
 export async function getAccessAction(anagraficaId) {
-  const hdr = await headers();
-  const userUid = hdr.get('x-user-uid');
-  if (!userUid) throw new Error('Unauthorized');
-
+  const { userUid } = await requireUser();
   if (!anagraficaId) throw new Error('Missing anagraficaId');
-
 
   const anagraficaRef = adminDb.collection('anagrafica').doc(anagraficaId);
   const anagraficaSnap = await anagraficaRef.get();
   if (!anagraficaSnap.exists) throw new Error('Anagrafica not found');
 
   const anagraficaData = anagraficaSnap.data() || {};
-  const allowedStructures =
-    anagraficaData.canBeAccessedBy || anagraficaData.structureIds || [];
+  const allowedStructures = anagraficaData.canBeAccessedBy || anagraficaData.structureIds || [];
 
-
-  let operatorDoc = await adminDb.collection('operators').doc(userUid).get();
-  if (!operatorDoc.exists) {
-    operatorDoc = await adminDb.collection('users').doc(userUid).get();
-  }
-  if (!operatorDoc.exists) throw new Error('Operator not found');
-
-  const operatorData = operatorDoc.data() || {};
-  const operatorStructures =
-    operatorData.structureIds || operatorData.structureId || [];
-
-
-  if (!arraysIntersect(operatorStructures, allowedStructures)) {
-    throw new Error('Forbidden: operator not allowed for this anagrafica');
-  }
-
+  // Check permissions
+  await verifyUserPermissions({ userUid, allowedStructures });
 
   const snap = await adminDb
     .collection('accessi')
@@ -224,9 +184,7 @@ export async function getAccessAction(anagraficaId) {
   snap.forEach(doc => {
     const data = doc.data();
 
-    // Check if it's new structure (services) or old structure (flat)
     if (data.services && Array.isArray(data.services)) {
-      // New structure
       accessi.push({
         id: doc.id,
         ...data,
@@ -236,12 +194,7 @@ export async function getAccessAction(anagraficaId) {
         }))
       });
     } else {
-      // Compatibility with old structure: Wrap it in a 'services' array for consistent frontend handling
-      // OR return as is and let frontend handle it.
-      // Let's normalize it to the new structure for the frontend if possible, 
-      // but since we want to be safe, let's keep it as is and let AccessInfo handle it.
-      // Actually, normalizing here is better.
-
+      // Compatibility with old structure
       accessi.push({
         id: doc.id,
         createdAt: data.createdAt,
@@ -269,9 +222,7 @@ export async function getAccessAction(anagraficaId) {
 }
 
 export async function getAccessFileUrl({ anagraficaId, filePath }) {
-  const hdr = await headers();
-  const userUid = hdr.get('x-user-uid');
-  if (!userUid) throw new Error('Unauthorized');
+  const { userUid } = await requireUser();
 
   if (!anagraficaId || !filePath) throw new Error('Missing parameters');
 
@@ -280,28 +231,15 @@ export async function getAccessFileUrl({ anagraficaId, filePath }) {
     throw new Error('Invalid file path for this anagrafica');
   }
 
-  // Permission check
   const anagraficaRef = adminDb.collection('anagrafica').doc(anagraficaId);
   const anagraficaSnap = await anagraficaRef.get();
   if (!anagraficaSnap.exists) throw new Error('Anagrafica not found');
 
   const anagraficaData = anagraficaSnap.data() || {};
-  const allowedStructures =
-    anagraficaData.canBeAccessedBy || anagraficaData.structureIds || [];
+  const allowedStructures = anagraficaData.canBeAccessedBy || anagraficaData.structureIds || [];
 
-  let operatorDoc = await adminDb.collection('operators').doc(userUid).get();
-  if (!operatorDoc.exists) {
-    operatorDoc = await adminDb.collection('users').doc(userUid).get();
-  }
-  if (!operatorDoc.exists) throw new Error('Operator not found');
-
-  const operatorData = operatorDoc.data() || {};
-  const operatorStructures =
-    operatorData.structureIds || operatorData.structureId || [];
-
-  if (!arraysIntersect(operatorStructures, allowedStructures)) {
-    throw new Error('Forbidden: operator not allowed for this anagrafica');
-  }
+  // Check permissions
+  await verifyUserPermissions({ userUid, allowedStructures });
 
   // Generate Signed URL
   // Valid for 1 hour
