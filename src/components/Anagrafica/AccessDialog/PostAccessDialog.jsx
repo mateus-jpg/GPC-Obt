@@ -1,8 +1,8 @@
 import React from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { generateICS, downloadICS } from "@/utils/icsUtils";
-import { Download } from "lucide-react";
+import { generateICS, downloadICS, generateGoogleCalendarUrl } from "@/utils/icsUtils";
+import { Download, Calendar, ExternalLink } from "lucide-react";
 
 export default function PostAccessDialog({ open, onOpenChange, payload, onDone }) {
     // Extract events
@@ -42,9 +42,6 @@ export default function PostAccessDialog({ open, onOpenChange, payload, onDone }
 
     const hasEvents = events.length > 0;
 
-    // If no events, we might not even want to show this special logic, 
-    // but if the parent opens it, we show success message at least.
-
     const handleDownload = () => {
         const ics = generateICS(events);
         downloadICS("promemoria_scadenze.ics", ics);
@@ -57,24 +54,58 @@ export default function PostAccessDialog({ open, onOpenChange, payload, onDone }
 
     return (
         <Dialog open={open} onOpenChange={(val) => !val && handleClose()}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle>Salvataggio completato</DialogTitle>
-                    <DialogContent className="pt-2">
-                        L'operazione è stata completata con successo.
-                        {hasEvents && (
-                            <div className="mt-2 text-foreground font-medium">
-                                Sono presenti {events.length} eventi (promemoria o scadenze).
-                                Vuoi scaricare un file per il tuo calendario?
-                            </div>
-                        )}
-                    </DialogContent>
                 </DialogHeader>
-                <DialogFooter className="flex flex-col sm:flex-row gap-2">
+
+                <div className="py-2 flex-1 overflow-y-auto">
+                    <p className="text-sm text-muted-foreground">
+                        L'operazione è stata completata con successo.
+                    </p>
                     {hasEvents && (
-                        <Button onClick={handleDownload} variant="outline" className="gap-2 sm:flex-1">
+                        <div className="mt-4 space-y-3">
+                            <h4 className="font-medium text-sm text-foreground">
+                                Eventi rilevati ({events.length}):
+                            </h4>
+                            <div className="grid gap-2">
+                                {events.map((evt, i) => (
+                                    <div key={i} className="flex items-center justify-between border rounded-md p-3 bg-muted/40">
+                                        <div className="min-w-0 flex-1 mr-2">
+                                            <div className="font-medium text-sm truncate" title={evt.title}>
+                                                {evt.title}
+                                            </div>
+                                            <div className="text-xs text-muted-foreground">
+                                                {evt.allDay
+                                                    ? evt.start.toLocaleDateString()
+                                                    : evt.start.toLocaleString()}
+                                            </div>
+                                        </div>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="ml-auto h-8 px-2 flex-shrink-0"
+                                            onClick={() => window.open(generateGoogleCalendarUrl(evt), '_blank')}
+                                            title="Aggiungi a Google Calendar"
+                                        >
+                                            <Calendar className="w-4 h-4 mr-1.5" />
+                                            <span className="text-xs hidden min-[400px]:inline">Google</span>
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
+                            <p className="text-xs text-muted-foreground pt-1">
+                                Puoi aggiungere i singoli eventi a Google Calendar o scaricare un file unico per tutti.
+                            </p>
+                        </div>
+                    )}
+                </div>
+
+                <DialogFooter className="flex flex-col sm:flex-row gap-2 mt-2 pt-2 border-t">
+                    {hasEvents && (
+                        <Button onClick={handleDownload} variant="secondary" className="gap-2 sm:flex-1">
                             <Download className="w-4 h-4" />
-                            Scarica Calendario (.ics)
+                            Scarica Tutto (.ics)
                         </Button>
                     )}
                     <Button onClick={handleClose} className={hasEvents ? "sm:flex-1" : "w-full"}>

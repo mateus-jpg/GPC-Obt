@@ -78,3 +78,51 @@ export function downloadICS(filename, content) {
     link.click();
     document.body.removeChild(link);
 }
+
+export function generateGoogleCalendarUrl(event) {
+    // event: { title, description, start (Date), end (Date), allDay (bool) }
+    // URL structure: https://calendar.google.com/calendar/render?action=TEMPLATE&text=Event+Name&dates=YYYYMMDDTHHMMSSZ/YYYYMMDDTHHMMSSZ&details=Event+Description&location=Online
+
+    const formatDate = (date) => {
+        // YYYYMMDDTHHMMSSZ (UTC)
+        return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    };
+
+    const formatAllDayDate = (date) => {
+        // YYYYMMDD
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}${month}${day}`;
+    };
+
+    let dates = '';
+    if (event.allDay) {
+        const startStr = formatAllDayDate(event.start);
+        const nextDay = new Date(event.start);
+        nextDay.setDate(nextDay.getDate() + 1);
+        const endStr = formatAllDayDate(nextDay);
+        dates = `${startStr}/${endStr}`;
+    } else {
+        const startStr = formatDate(event.start);
+        let endStr;
+        if (event.end) {
+            endStr = formatDate(event.end);
+        } else {
+            // Default 1 hour
+            const endDate = new Date(event.start);
+            endDate.setHours(endDate.getHours() + 1);
+            endStr = formatDate(endDate);
+        }
+        dates = `${startStr}/${endStr}`;
+    }
+
+    const params = new URLSearchParams({
+        action: 'TEMPLATE',
+        text: event.title,
+        details: event.description || '',
+        dates: dates,
+    });
+
+    return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
