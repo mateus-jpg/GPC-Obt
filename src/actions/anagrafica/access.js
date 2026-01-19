@@ -3,8 +3,10 @@
 import { headers } from 'next/headers';
 import admin from '@/lib/firebase/firebaseAdmin';
 import { randomUUID } from 'crypto';
+import path from 'path';
 import { stripHtml } from '@/utils/htmlSanitizer';
 import { requireUser, verifyUserPermissions } from '@/utils/server-auth';
+import { FILE_SIZE_LIMIT, ALLOWED_MIME_TYPES } from '@/utils/fileValidation';
 
 const adminDb = admin.firestore();
 const adminStorage = admin.storage();
@@ -58,9 +60,21 @@ export async function createAccessInternal({ anagraficaId, services, structureId
 
         if (!buffer) continue;
 
-        // Use a unique name for storage to avoid collisions, but keep original name in metadata
-        const fileNameSanitized = originalName.replace(/[^a-zA-Z0-9.-]/g, "_");
-        const storagePath = `files/${anagraficaId}/accessi/${accessId}/${index}_${randomUUID()}_${fileNameSanitized}`;
+        // Security: Validate file size
+        if (buffer.length > FILE_SIZE_LIMIT) {
+          throw new Error(`File ${originalName} exceeds size limit of ${FILE_SIZE_LIMIT / 1024 / 1024}MB`);
+        }
+
+        // Security: Validate MIME type
+        if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
+          throw new Error(`File type ${mimeType} is not allowed`);
+        }
+
+        // Security: Extract safe file extension from original name
+        const fileExt = path.extname(originalName).toLowerCase().replace(/[^a-z0-9.]/g, '') || '';
+        // Security: Use UUID-only storage paths to prevent path traversal attacks
+        // Original filename is stored in metadata only, never in the file path
+        const storagePath = `files/${anagraficaId}/accessi/${accessId}/${index}_${randomUUID()}${fileExt}`;
 
         const fileRef = adminStorage.bucket().file(storagePath);
         await fileRef.save(buffer, { contentType: mimeType, resumable: false });
@@ -131,7 +145,6 @@ export async function createAccessAction(payload) {
     structureId,
   } = payload;
 
-  console.log('createAccessAction payload:', payload);
   if (!anagraficaId || services.length === 0) throw new Error('Missing required fields');
 
   const anagraficaRef = adminDb.collection('anagrafica').doc(anagraficaId);
@@ -226,8 +239,18 @@ export async function getAccessFileUrl({ anagraficaId, filePath }) {
 
   if (!anagraficaId || !filePath) throw new Error('Missing parameters');
 
-  // Security check: ensure filePath belongs to the anagrafica
-  if (!filePath.startsWith(`files/${anagraficaId}/`)) {
+  // Security: Validate anagraficaId format (should be alphanumeric Firebase ID)
+  if (!/^[a-zA-Z0-9]+$/.test(anagraficaId)) {
+    throw new Error('Invalid anagraficaId format');
+  }
+
+  // Security: Normalize path to prevent path traversal attacks (../ sequences)
+  const normalizedPath = path.posix.normalize(filePath);
+  const expectedPrefix = `files/${anagraficaId}/`;
+
+  // Security: Check that normalized path starts with expected prefix
+  // and doesn't contain dangerous sequences after normalization
+  if (!normalizedPath.startsWith(expectedPrefix) || normalizedPath.includes('..')) {
     throw new Error('Invalid file path for this anagrafica');
   }
 
@@ -243,9 +266,10 @@ export async function getAccessFileUrl({ anagraficaId, filePath }) {
 
   // Generate Signed URL
   // Valid for 1 hour
+  // Security: Use the normalized path to prevent path traversal
   const [url] = await adminStorage
     .bucket()
-    .file(filePath)
+    .file(normalizedPath)
     .getSignedUrl({
       action: 'read',
       expires: Date.now() + 1000 * 60 * 60, // 1 hour
