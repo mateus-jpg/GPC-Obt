@@ -53,8 +53,6 @@ export default function AccessDialog({ anagraficaId, structureId }) {
       };
 
       await createAccessAction(payload);
-
-      console.log("Accesso unificato creato con successo");
       toast.success("Accesso creato con successo");
 
       // Handle success dialog
@@ -63,12 +61,12 @@ export default function AccessDialog({ anagraficaId, structureId }) {
       setShowPostDialog(true); // Open the success/download dialog
 
     } catch (error) {
-      console.error("Errore durante la creazione dell'accesso:", error);
       toast.error("Si è verificato un errore durante la creazione dell'accesso.");
     } finally {
       setLoading(false);
     }
   };
+
 
   const validTypesCount = getValidAccessTypes().length;
 

@@ -23,8 +23,6 @@ export function NavMain({
   }
   const router = useRouter()
   const pathname = usePathname();
-  console.log("Structure ID in NavMain:", structureId);
-  console.log("current path:", pathname);
   return (
     <SidebarGroup>
       <SidebarGroupContent className="flex flex-col gap-2">

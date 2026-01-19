@@ -51,9 +51,9 @@ export async function createEventAction(payload
 
 
   let operatorDoc = await adminDb.collection('operators').doc(userUid).get();
-  /*   if (!operatorDoc.exists) {
-      operatorDoc = await adminDb.collection('users').doc(userUid).get();
-    } */
+  if (!operatorDoc.exists) {
+    operatorDoc = await adminDb.collection('users').doc(userUid).get();
+  }
   if (!operatorDoc.exists) throw new Error('Operator not found');
 
   const operatorData = operatorDoc.data() || {};

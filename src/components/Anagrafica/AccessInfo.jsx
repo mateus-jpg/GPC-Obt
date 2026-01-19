@@ -17,6 +17,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { toast } from "sonner";
 
 import { getAccessFileUrl } from "@/actions/anagrafica/access";
 
@@ -46,7 +47,6 @@ export default function AccessInfo({ accesses }) {
     });
 
     setData(flatList);
-    console.log("Accesses received and flattened:", flatList);
   }, [accesses]);
 
   const handleDownloadFile = async (anagraficaId, file) => {
@@ -55,11 +55,10 @@ export default function AccessInfo({ accesses }) {
       if (response.success && response.url) {
         window.open(response.url, '_blank');
       } else {
-        alert("Impossibile recuperare il file.");
+        toast.error("Impossibile recuperare il file.");
       }
     } catch (error) {
-      console.error("Download error:", error);
-      alert("Errore durante il download del file.");
+      toast.error("Errore durante il download del file.");
     }
   };
 

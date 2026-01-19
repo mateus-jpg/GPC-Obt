@@ -45,16 +45,21 @@ export async function middleware(req) {
     const requestHeaders = new Headers(req.headers);
     requestHeaders.set('x-user-uid', user.uid);
     requestHeaders.set('x-user-email', user.email || '');
-    
+
 
     return NextResponse.next({
-        request: {
-            headers: requestHeaders,
-        }
+      request: {
+        headers: requestHeaders,
+      }
     });
 
   } catch (error) {
-    console.log(`Session verification error for ${pathname}:`, error.message);
+    // Session verification failed - redirect to login
+    // Note: Using console.error here since middleware runs in edge runtime
+    // and doesn't have access to our logger utility
+    if (process.env.NODE_ENV !== 'production') {
+      console.error(`Session verification error for ${pathname}:`, error.message);
+    }
 
     // If verification fails, clear the invalid cookie and redirect
     const loginUrl = new URL("/login", req.url);
@@ -68,53 +73,3 @@ export async function middleware(req) {
 export const config = {
   matcher: ['/((?!api/auth/sessionLogin|api/auth/|api/auth/verify|_next/static|_next/image|favicon.ico|.*\\.css).*)'],
 };
-
-
-/* 
-
-  // Quick verification via internal API
-  try {
-    const decodedToken = await auth.verifySessionCookie(sessionCookie, true);
-
-    const verify_url = new URL("/api/auth/verify", req.url)
-    console.log("Fetching ", verify_url)
-    const verifyRes = await fetch(verify_url, {
-      headers: { 
-        cookie: req.headers.get("cookie") || "",
-        'cache-control': 'no-cache',
-      },
-    });
-    
-    if (!verifyRes.ok) {
-      const errorData = await verifyRes.text();
-      console.log(`Session verification failed for ${pathname}:`, errorData);
-      throw new Error("Verification failed");
-    }
-    
-    const { user } = await verifyRes.json();
-    console.log(`✓ Session verified for ${pathname}, user: ${user.uid}`);
-    
-    const res = NextResponse.next();
-    res.headers.set("x-user-uid", user.uid);
-    res.headers.set("x-user-email", user.email || "");
-    
-    return res;
-  } catch (error) {
-    console.log(`Session verification error for ${pathname}:`, error.message);
-    
-    // Clear invalid cookie and redirect
-    const loginUrl = new URL("/login", req.url);
-    loginUrl.searchParams.set("from", pathname);
-    const response = NextResponse.redirect(loginUrl);
-    response.cookies.set(cookieName, "", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 0,
-      path: "/",
-    });
-    
-    return response;
-  }
-}
-*/

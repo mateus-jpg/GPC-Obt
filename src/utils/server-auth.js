@@ -1,11 +1,13 @@
 import { headers } from 'next/headers';
-import admin from '@/lib/firebase/firebaseAdmin';
-
-const adminDb = admin.firestore();
+import { getUserDocument, arraysIntersect } from './database';
+import { logger } from './logger';
 
 /**
  * Extracts the user UID from headers.
  * Throws an error if not found.
+ * 
+ * @returns {Promise<{userUid: string, headers: Headers}>}
+ * @throws {Error} If x-user-uid header is missing
  */
 export async function requireUser() {
     const hdr = await headers();
@@ -18,41 +20,128 @@ export async function requireUser() {
 
 /**
  * Verifies that the user (operator) exists and has access to the given structure/anagrafica.
- * Returns the operator data.
+ * 
+ * @param {Object} params - Verification parameters
+ * @param {string} params.userUid - User's UID
+ * @param {string} [params.structureId] - Specific structure ID to check access for
+ * @param {string[]} [params.allowedStructures] - Array of structure IDs that grant access
+ * @returns {Promise<{operatorData: Object, userStructures: string[], isSuperAdmin: boolean}>}
+ * @throws {Error} If user not found or lacks required permissions
  */
 export async function verifyUserPermissions({ userUid, structureId, allowedStructures = [] }) {
-    let operatorDoc = await adminDb.collection('operators').doc(userUid).get();
-    if (!operatorDoc.exists) {
-        operatorDoc = await adminDb.collection('users').doc(userUid).get();
-    }
+    const userDoc = await getUserDocument(userUid);
 
-    if (!operatorDoc.exists) {
+    if (!userDoc.exists) {
+        logger.warn('User not found during permission check', { userUid });
         throw new Error(`User ${userUid} not found in operators or users`);
     }
 
-    const operatorData = operatorDoc.data();
+    const operatorData = userDoc.data;
+
+    // Super Admin bypass: if user is a global admin, grant access to all structures
+    if (operatorData.role === 'admin') {
+        logger.debug('Super admin bypassing structure checks', { userUid });
+        return {
+            operatorData,
+            userStructures: [],
+            isSuperAdmin: true
+        };
+    }
+
     const userStructures = operatorData.structureIds || operatorData.structureId || [];
 
     // 1. If structureId is provided, check if user has access to this specific structure
     if (structureId && !userStructures.includes(structureId)) {
+        logger.warn('User lacks access to structure', { userUid, structureId, userStructures });
         throw new Error(`Forbidden: User does not have access to structure ${structureId}`);
     }
 
     // 2. If allowedStructures is provided (e.g. from an existing Anagrafica), check intersection
     if (allowedStructures.length > 0) {
-        const hasAccess = allowedStructures.some(s => userStructures.includes(s));
+        const hasAccess = arraysIntersect(allowedStructures, userStructures);
         if (!hasAccess) {
+            logger.warn('User lacks access to resource', { userUid, allowedStructures, userStructures });
             throw new Error('Forbidden: User does not have permission to access this resource');
         }
     }
 
-    return { operatorData, userStructures };
+    return {
+        operatorData,
+        userStructures,
+        isSuperAdmin: false
+    };
 }
 
 /**
- * Helper to check intersection of two arrays
+ * Verifies if a user is an admin of a specific structure.
+ * Super admins automatically pass this check.
+ * 
+ * @param {Object} params - Verification parameters
+ * @param {string} params.userUid - User's UID
+ * @param {string} params.structureId - Structure ID to check admin status for
+ * @returns {Promise<boolean>} True if user is admin
+ * @throws {Error} If user is not an admin of the structure
  */
-export function arraysIntersect(a = [], b = []) {
-    const set = new Set(a || []);
-    return (b || []).some(x => set.has(x));
+export async function verifyStructureAdmin({ userUid, structureId }) {
+    const userDoc = await getUserDocument(userUid);
+
+    if (!userDoc.exists) {
+        logger.warn('User not found during structure admin check', { userUid });
+        throw new Error("User not found");
+    }
+
+    const operatorData = userDoc.data;
+
+    // Check if user is a global admin
+    if (operatorData.role === 'admin') {
+        logger.debug('Super admin accessing structure admin function', { userUid, structureId });
+        return true;
+    }
+
+    // Check structure specific admin list
+    const { collections } = await import('./database');
+    const structureDoc = await collections.structures().doc(structureId).get();
+
+    if (!structureDoc.exists) {
+        logger.warn('Structure not found', { structureId });
+        throw new Error("Structure not found");
+    }
+
+    const structureData = structureDoc.data();
+    const admins = structureData.admins || [];
+
+    if (admins.includes(userUid)) {
+        return true;
+    }
+
+    logger.warn('User is not structure admin', { userUid, structureId });
+    throw new Error("Forbidden: User is not an admin of this structure");
+}
+
+/**
+ * Verifies if the user is a Super Admin.
+ * Checks against the database for role: 'admin'.
+ * 
+ * @param {Object} params - Verification parameters
+ * @param {string} params.userUid - User's UID
+ * @returns {Promise<boolean>} True if user is super admin
+ * @throws {Error} If user is not a super admin
+ */
+export async function verifySuperAdmin({ userUid }) {
+    const userDoc = await getUserDocument(userUid);
+
+    if (!userDoc.exists) {
+        logger.warn('User not found during super admin check', { userUid });
+        throw new Error('Forbidden: User not found');
+    }
+
+    const data = userDoc.data;
+
+    if (data.role === 'admin') {
+        logger.debug('Super admin verified', { userUid });
+        return true;
+    }
+
+    logger.warn('User is not super admin', { userUid, role: data.role });
+    throw new Error('Forbidden: User is not a Super Admin');
 }

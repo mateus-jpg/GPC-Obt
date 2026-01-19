@@ -35,8 +35,6 @@ export default function EventInfo({ events }) {
         };
       })
     );
-    debugger
-    console.log("Events received:", events);
   }, [events]);
 
   const columns = useMemo(

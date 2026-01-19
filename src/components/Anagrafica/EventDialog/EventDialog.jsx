@@ -21,6 +21,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { IconCalendarPlus } from "@tabler/icons-react";
 import { createEventAction } from "@/actions/anagrafica/events";
+import { toast } from "sonner";
 
 
 export default function EventDialog({ anagraficaId, structureId }) {
