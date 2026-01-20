@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent, } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, PencilIcon } from "lucide-react";
 import Otherinfo from "@/components/Anagrafica/Otherinfo";
+import HistoryTimeline from "@/components/Anagrafica/HistoryTimeline";
 import admin from "@/lib/firebase/firebaseAdmin";
 
 import { Status, StatusIndicator } from '@/components/ui/shadcn-io/status';
@@ -159,6 +160,11 @@ export default async function AnagraficaViewPage({ params }) {
       {anagraficaAccesses && (
         <AccessInfo accesses={anagraficaAccesses.accessi} />
       )}
+
+      {/* History Section */}
+      <div className="mt-6">
+        <HistoryTimeline anagraficaId={anagrafica.id} />
+      </div>
     </div>
 
   );

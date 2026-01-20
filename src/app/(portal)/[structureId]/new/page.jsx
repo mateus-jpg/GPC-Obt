@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 // Action
 import { createAnagrafica } from "@/actions/anagrafica/anagrafica";
+import { getStructureCategories, addSubcategoryToStructure } from "@/actions/admin/structure";
 import { useAccessForm } from "@/hooks/useAccessForm";
 import AccessServicesForm from "@/components/Anagrafica/AccessServicesForm";
 import { toast } from "sonner";
@@ -20,6 +21,7 @@ import WorkEducationSection from "@/components/Anagrafica/Form/WorkEducationSect
 import VulnerabilitySection from "@/components/Anagrafica/Form/VulnerabilitySection";
 import ReferralSection from "@/components/Anagrafica/Form/ReferralSection";
 import PostAccessDialog from "@/components/Anagrafica/AccessDialog/PostAccessDialog";
+
 export default function AnagraficaForm({ params }) {
   const { structureId } = React.use(params);
   const { user } = useAuth();
@@ -29,12 +31,66 @@ export default function AnagraficaForm({ params }) {
   const [lastPayload, setLastPayload] = useState(null);
   const [redirectId, setRedirectId] = useState(null);
 
-  // Use Custom Hook for Access Logic
+  // Categories state
+  const [categories, setCategories] = useState(null);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+
+  // Fetch categories on mount
+  useEffect(() => {
+    async function loadCategories() {
+      try {
+        const cats = await getStructureCategories(structureId);
+        setCategories(cats);
+      } catch (err) {
+        console.error("Error loading categories:", err);
+      } finally {
+        setCategoriesLoading(false);
+      }
+    }
+    loadCategories();
+  }, [structureId]);
+
+  // Handle adding a new subcategory
+  const handleNewSubcategory = useCallback(async (categoryValue, newSubcategory) => {
+    try {
+      const result = await addSubcategoryToStructure(structureId, categoryValue, newSubcategory);
+      if (result.success) {
+        // Update local categories state
+        setCategories((prevCategories) => {
+          if (!prevCategories) return prevCategories;
+          return prevCategories.map((cat) => {
+            if (cat.value === categoryValue) {
+              const existingSubcats = cat.subCategories || [];
+              const altroIndex = existingSubcats.findIndex((s) => s === "Altro");
+              const newSubcats = [...existingSubcats];
+              if (altroIndex !== -1) {
+                newSubcats.splice(altroIndex, 0, newSubcategory);
+              } else {
+                newSubcats.push(newSubcategory);
+              }
+              return { ...cat, subCategories: newSubcats };
+            }
+            return cat;
+          });
+        });
+        if (!result.alreadyExists) {
+          toast.success(`Sottocategoria "${newSubcategory}" aggiunta`);
+        }
+      } else {
+        toast.error(`Errore: ${result.error}`);
+      }
+    } catch (error) {
+      console.error("Error adding subcategory:", error);
+      toast.error("Errore durante l'aggiunta della sottocategoria");
+    }
+  }, [structureId]);
+
+  // Use Custom Hook for Access Logic - pass categories
   const {
     accessState,
     updateAccessField,
     prepareAccessPayload
-  } = useAccessForm();
+  } = useAccessForm(categories);
 
   // Form Data for Anagrafica
   // Form Data for Anagrafica
@@ -191,10 +247,18 @@ export default function AnagraficaForm({ params }) {
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-2">
-                <AccessServicesForm
-                  state={accessState}
-                  onChange={updateAccessField}
-                />
+                {categoriesLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  </div>
+                ) : (
+                  <AccessServicesForm
+                    state={accessState}
+                    onChange={updateAccessField}
+                    categories={categories}
+                    onNewSubcategory={handleNewSubcategory}
+                  />
+                )}
               </CardContent>
             </Card>
           </div>

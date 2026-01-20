@@ -1,3 +1,4 @@
+// Default access types - used as fallback when structure has no custom categories
 export const AccessTypes = [
   {
     value: "legale",
@@ -139,3 +140,6 @@ export const AccessClassifications = [
   "Informativa (il bisogno dell'utente è soddisfatto fornendo informazioni e/o orientamento generale)",
   "Supporto indiretto / Referral verso altri servizi (l'utente viene inviato verso uno specifico servizio del territorio adatto a rispondere al suo bisogno)"
 ];
+
+// Alias for clarity when used as default fallback
+export const DefaultAccessTypes = AccessTypes;

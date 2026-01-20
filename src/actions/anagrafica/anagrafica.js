@@ -4,6 +4,8 @@ import { unstable_cache } from 'next/cache';
 import admin from '@/lib/firebase/firebaseAdmin';
 import { requireUser, verifyUserPermissions } from '@/utils/server-auth';
 import { createAccessInternal } from './access';
+import { createHistoryEntry } from './history';
+import { computeGroupChanges } from '@/utils/anagraficaUtils';
 import { CACHE_TAGS, REVALIDATE, invalidateAnagraficaCaches } from '@/lib/cache';
 
 const adminDb = admin.firestore();
@@ -108,6 +110,22 @@ export async function updateAnagraficaInternal(anagraficaId, body, userUid, user
     userUid,
     allowedStructures
   });
+
+  // Compute which groups have changed for history tracking
+  const { changedGroups, changes } = computeGroupChanges(anagraficaData, body);
+
+  // Create history entry BEFORE applying the update (if there are changes)
+  if (changedGroups.length > 0) {
+    await createHistoryEntry({
+      anagraficaId,
+      changeType: 'update',
+      changedGroups,
+      changes,
+      userUid,
+      userMail,
+      structureId
+    });
+  }
 
   const updateData = {
     ...body,
