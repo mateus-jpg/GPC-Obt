@@ -1,45 +1,20 @@
-"use server"
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardContent, } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Edit, PencilIcon, PlusCircleIcon, UserRound } from "lucide-react";
+import { ArrowLeft, PencilIcon } from "lucide-react";
 import Otherinfo from "@/components/Anagrafica/Otherinfo";
 import admin from "@/lib/firebase/firebaseAdmin";
 
-import { Status, StatusIndicator, StatusLabel } from '@/components/ui/shadcn-io/status';
+import { Status, StatusIndicator } from '@/components/ui/shadcn-io/status';
 import { Button } from "@/components/ui/button";
 import AccessDialog from "@/components/Anagrafica/AccessDialog/AccessDialog";
-import EventDialog from "@/components/Anagrafica/EventDialog/EventDialog";
 import { getAccessAction } from "@/actions/anagrafica/access";
 import AccessInfo from "@/components/Anagrafica/AccessInfo";
 import { getEventsAction } from "@/actions/anagrafica/events";
 import EventInfo from "@/components/Anagrafica/EventInfo";
-
-async function getAnagraficaData(id) {
-  const headersList = await headers();
-  const host = headersList.get('x-forwarded-host') || headersList.get('host');
-  const protocol = headersList.get('x-forwarded-proto') || 'http';
-
-  try {
-    const res = await fetch(`${protocol}://${host}/api/anagrafica/${id}`, {
-      headers: {
-        cookie: headersList.get('cookie') || '',
-      },
-      cache: 'no-store',
-    });
-
-    if (!res.ok) {
-      return null;
-    }
-
-    return await res.json();
-  } catch (error) {
-    console.error('Error fetching anagrafica:', error);
-    return null;
-  }
-}
+import { getAnagrafica } from "@/actions/anagrafica/anagrafica";
 
 async function canUserAccess(anagrafica, userID) {
   const db = admin.firestore();
@@ -68,21 +43,29 @@ export default async function AnagraficaViewPage({ params }) {
     return notFound();
   }
 
-
-
-  const [anagraficaAccesses, anagraficaEvents, anagrafica] = await Promise.all([
-    getAccessAction(id),
-    getEventsAction(id),
-    getAnagraficaData(id)
-  ]);
-  console.log(anagraficaAccesses)
-  console.log(anagraficaEvents)
-  if (!anagrafica) {
+  // Use cached server action instead of fetch with no-store
+  let anagrafica = null;
+  try {
+    const anagraficaJson = await getAnagrafica(id);
+    anagrafica = JSON.parse(anagraficaJson);
+  } catch (error) {
+    console.error('Error fetching anagrafica:', error);
     return notFound();
   }
 
+  // Fetch accessi and eventi in parallel (these also use caching)
+  const [anagraficaAccesses, anagraficaEvents] = await Promise.all([
+    getAccessAction(id),
+    getEventsAction(id),
+  ]);
 
-  const userStructureIds = [structureId]; // Should come from user's profile
+  console.log(anagrafica)
+  console.log(anagraficaAccesses)
+  console.log(anagraficaEvents)
+
+  if (!anagrafica) {
+    return notFound();
+  }
 
   if (!await canUserAccess(anagrafica, userUid)) {
     return (
@@ -177,7 +160,7 @@ export default async function AnagraficaViewPage({ params }) {
           </Link>
         </Button>
         <div className="flex gap-2">
-          <EventDialog anagraficaId={anagrafica.id} structureId={structureId} />
+          {/* <EventDialog anagraficaId={anagrafica.id} structureId={structureId} /> */}
           <AccessDialog anagraficaId={anagrafica.id} structureId={structureId} />
         </div>
       </div>

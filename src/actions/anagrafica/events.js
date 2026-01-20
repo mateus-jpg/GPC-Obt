@@ -1,46 +1,59 @@
 'use server';
 
-import { headers } from 'next/headers';
+import { unstable_cache } from 'next/cache';
 import admin from '@/lib/firebase/firebaseAdmin';
 import { randomUUID } from 'crypto';
-import { create } from 'domain';
+import path from 'path';
 import { stripHtml } from '@/utils/htmlSanitizer';
-/**
- * Helper: controlla se due array hanno intersezione
- */
-function arraysIntersect(a = [], b = []) {
-  const set = new Set(a || []);
-  return (b || []).some(x => set.has(x));
-}
+import { requireUser, verifyUserPermissions } from '@/utils/server-auth';
+import { FILE_SIZE_LIMIT, ALLOWED_MIME_TYPES } from '@/utils/fileValidation';
+import { CACHE_TAGS, REVALIDATE, invalidateEventiCache } from '@/lib/cache';
+import { z } from 'zod';
 
 const adminDb = admin.firestore();
 const adminStorage = admin.storage();
+
+/**
+ * Zod schema for event payload validation
+ */
+const eventPayloadSchema = z.object({
+  anagraficaId: z.string().min(1, 'anagraficaId is required'),
+  tipoEvento: z.string().min(1, 'tipoEvento is required'),
+  sottocategorie: z.array(z.string()).optional().default([]),
+  altro: z.string().nullable().optional().default(null),
+  note: z.string().nullable().optional().default(null),
+  title: z.string().nullable().optional().default(null),
+  dataOra: z.string().nullable().optional().default(null),
+  files: z.array(z.any()).optional().default([]),
+  classificazione: z.string().nullable().optional().default(null),
+  enteRiferimento: z.string().nullable().optional().default(null),
+  structureId: z.string().optional(),
+});
+
 /**
  * CREA EVENTO
  */
-export async function createEventAction(payload
-) {
-  const hdr = await headers();
-  const userUid = hdr.get('x-user-uid');
+export async function createEventAction(payload) {
+  // Security: Use standardized auth helper
+  const { userUid, headers: hdr } = await requireUser();
   const userEmail = hdr.get('x-user-email');
-  if (!userUid) throw new Error('Unauthorized');
 
+  // Security: Validate payload with Zod schema
+  const validatedPayload = eventPayloadSchema.parse(payload);
   const {
     anagraficaId,
     tipoEvento,
-    sottocategorie = [],
-    altro = null,
-    note = null,
-    dataOra = null,
-    files = [],
-    classificazione = null,
-    enteRiferimento = null,
+    sottocategorie,
+    altro,
+    note,
+    title,
+    dataOra,
+    files,
+    classificazione,
+    enteRiferimento,
     structureId,
-  } = payload;
+  } = validatedPayload;
 
-  if (!anagraficaId || !tipoEvento) throw new Error('Missing required fields');
-
-  
   const anagraficaRef = adminDb.collection('anagrafica').doc(anagraficaId);
   const anagraficaSnap = await anagraficaRef.get();
   if (!anagraficaSnap.exists) throw new Error('Anagrafica not found');
@@ -48,32 +61,36 @@ export async function createEventAction(payload
   const anagraficaData = anagraficaSnap.data() || {};
   const allowedStructures = anagraficaData.canBeAccessedBy || anagraficaData.structureIds || [];
 
-  
-  let operatorDoc = await adminDb.collection('operators').doc(userUid).get();
-/*   if (!operatorDoc.exists) {
-    operatorDoc = await adminDb.collection('users').doc(userUid).get();
-  } */
-  if (!operatorDoc.exists) throw new Error('Operator not found');
+  // Security: Use standardized permission verification
+  await verifyUserPermissions({ userUid, allowedStructures });
 
-  const operatorData = operatorDoc.data() || {};
-  const operatorStructures = operatorData.structureIds || operatorData.structureId || [];
-
-  
-  if (!arraysIntersect(operatorStructures, allowedStructures)) {
-    throw new Error('Forbidden: operator not allowed for this anagrafica');
-  }
-
+  // Additional check: structureId must be in allowed structures
   if (structureId && !allowedStructures.includes(structureId)) {
     throw new Error('Forbidden: invalid structureId');
   }
-  
+
   const eventId = randomUUID();
   const uploadedFiles = [];
 
-  for (const a of files || []) {
+  for (let index = 0; index < (files || []).length; index++) {
+    const a = files[index];
     const arrayBuffer = await a.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    const storagePath = `files/${anagraficaId}/eventi/${eventId}/${a.name}`;
+
+    // Security: Validate file size
+    if (buffer.length > FILE_SIZE_LIMIT) {
+      throw new Error(`File ${a.name} exceeds size limit of ${FILE_SIZE_LIMIT / 1024 / 1024}MB`);
+    }
+
+    // Security: Validate MIME type
+    if (!ALLOWED_MIME_TYPES.includes(a.type)) {
+      throw new Error(`File type ${a.type} is not allowed`);
+    }
+
+    // Security: Extract safe file extension and use UUID-only storage paths
+    // to prevent path traversal attacks
+    const fileExt = path.extname(a.name).toLowerCase().replace(/[^a-z0-9.]/g, '') || '';
+    const storagePath = `files/${anagraficaId}/eventi/${eventId}/${index}_${randomUUID()}${fileExt}`;
 
     const fileRef = adminStorage.bucket().file(storagePath);
     await fileRef.save(buffer, {
@@ -83,19 +100,21 @@ export async function createEventAction(payload
 
     uploadedFiles.push({
       nome: a.name,
+      nomeOriginale: a.name,
       tipo: a.type,
       dimensione: a.size,
-      path: storagePath, 
+      path: storagePath,
     });
   }
 
-  
+
   const eventData = {
     anagraficaId,
     tipoEvento,
     sottocategorie,
     altro,
     note,
+    title,
     dataOra: dataOra || null,
     files: uploadedFiles,
     createdBy: userUid,
@@ -109,45 +128,17 @@ export async function createEventAction(payload
 
   await adminDb.collection('eventi').doc(eventId).set(eventData);
 
+  // Invalidate eventi cache after creating new event
+  invalidateEventiCache(anagraficaId);
+
   return { success: true, eventId, eventData };
 }
 
-
-
-export async function getEventsAction(anagraficaId) {
-  const hdr = await headers();
-  const userUid = hdr.get('x-user-uid');
-  const userEmail = hdr.get('x-user-email');
-  if (!userUid) throw new Error('Unauthorized');
-
-  if (!anagraficaId) throw new Error('Missing anagraficaId');
-
-  
-  const anagraficaRef = adminDb.collection('anagrafica').doc(anagraficaId);
-  const anagraficaSnap = await anagraficaRef.get();
-  if (!anagraficaSnap.exists) throw new Error('Anagrafica not found');
-
-  const anagraficaData = anagraficaSnap.data() || {};
-  const allowedStructures =
-    anagraficaData.canBeAccessedBy || anagraficaData.structureIds || [];
-
-  
-  let operatorDoc = await adminDb.collection('operators').doc(userUid).get();
-  if (!operatorDoc.exists) {
-    operatorDoc = await adminDb.collection('users').doc(userUid).get();
-  }
-  if (!operatorDoc.exists) throw new Error('Operator not found');
-
-  const operatorData = operatorDoc.data() || {};
-  const operatorStructures =
-    operatorData.structureIds || operatorData.structureId || [];
-
-  
-  if (!arraysIntersect(operatorStructures, allowedStructures)) {
-    throw new Error('Forbidden: operator not allowed for this anagrafica');
-  }
-
-  
+/**
+ * Internal function to fetch eventi from database
+ * Used by cached wrapper
+ */
+async function fetchEventiFromDb(anagraficaId) {
   const snap = await adminDb
     .collection('eventi')
     .where('anagraficaId', '==', anagraficaId)
@@ -159,10 +150,45 @@ export async function getEventsAction(anagraficaId) {
     const data = doc.data();
     eventi.push({
       id: doc.id,
-      sanitizedNote : stripHtml(data.note || '' ),
+      sanitizedNote: stripHtml(data.note || ''),
       ...data,
     });
   });
+
+  return eventi;
+}
+
+/**
+ * Get events for an anagrafica with caching
+ * Permission check runs fresh on every call (not cached)
+ */
+export async function getEventsAction(anagraficaId) {
+  // Security: Use standardized auth helper
+  const { userUid } = await requireUser();
+
+  if (!anagraficaId) throw new Error('Missing anagraficaId');
+
+  const anagraficaRef = adminDb.collection('anagrafica').doc(anagraficaId);
+  const anagraficaSnap = await anagraficaRef.get();
+  if (!anagraficaSnap.exists) throw new Error('Anagrafica not found');
+
+  const anagraficaData = anagraficaSnap.data() || {};
+  const allowedStructures = anagraficaData.canBeAccessedBy || anagraficaData.structureIds || [];
+
+  // Security: Permission check is NOT cached - always runs fresh
+  await verifyUserPermissions({ userUid, allowedStructures });
+
+  // Get cached eventi data
+  const getCachedEventi = unstable_cache(
+    async () => fetchEventiFromDb(anagraficaId),
+    [`eventi`, anagraficaId],
+    {
+      tags: [CACHE_TAGS.eventi(anagraficaId)],
+      revalidate: REVALIDATE.eventi,
+    }
+  );
+
+  const eventi = await getCachedEventi();
 
   return {
     success: true,

@@ -35,8 +35,6 @@ export default function EventInfo({ events }) {
         };
       })
     );
-    debugger
-    console.log("Events received:", events);
   }, [events]);
 
   const columns = useMemo(
@@ -72,6 +70,12 @@ export default function EventInfo({ events }) {
         header: "Data e ora",
         size: 200,
         Cell: ({ cell }) => formatDate(cell.getValue(), true) || "-",
+      },
+      {
+        accessorKey: "title",
+        header: "Titolo",
+        size: 200,
+        Cell: ({ cell }) => <span className="font-semibold">{cell.getValue() || "-"}</span>,
       },
       {
         accessorKey: "tipoEvento",
@@ -163,7 +167,7 @@ export default function EventInfo({ events }) {
           ) : (
             <MaterialReactTable
               muiTablePaperProps={{
-                sx: { borderRadius: 3, border: '1px solid var(--color-gray-200)', elevation : 3 },
+                sx: { borderRadius: 3, border: '1px solid var(--color-gray-200)', elevation: 3 },
               }}
               columns={columns}
               data={data}

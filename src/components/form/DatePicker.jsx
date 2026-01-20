@@ -11,7 +11,14 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 // Reusable DatePicker component adapted from your Calendar22
-export default function DatePicker({ value, onChange, label, required }) {
+export default function DatePicker({
+  value,
+  onChange,
+  label,
+  required,
+  fromYear = 1920,
+  toYear = new Date().getFullYear(),
+}) {
   const [open, setOpen] = React.useState(false);
 
   return (
@@ -43,8 +50,8 @@ export default function DatePicker({ value, onChange, label, required }) {
               setOpen(false);
             }}
             captionLayout="dropdown"
-            fromYear={1920}
-            toYear={new Date().getFullYear()}
+            fromYear={fromYear}
+            toYear={toYear}
             initialFocus
           />
         </PopoverContent>
