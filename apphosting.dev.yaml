@@ -1,0 +1,83 @@
+# apphosting.yaml
+# Settings for Backend (on Cloud Run).
+# See https://firebase.google.com/docs/app-hosting/configure#cloud-run
+
+
+
+
+
+
+runConfig:
+  minInstances: 0
+  maxInstances: 50
+  # concurrency: 80
+  # cpu: 1
+  # memoryMiB: 512
+
+env:
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: "AIzaSyBe79kAdJWyvV1grPARhZr4VcpINcfAQuw"
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: "gpc-obt-dev.firebaseapp.com"
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: "gpc-obt-dev"
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: "gpc-obt-dev.firebasestorage.app"
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "210201508497"
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: "1:210201508497:web:4b4dec9ac1d56d14d4dd30"
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+    value: "G-5CBM1LLV2H"
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: SESSION_COOKIE_NAME
+    value: "_gpc_obt_dev_session-cookie"
+    availability:
+      - BUILD
+      - RUNTIME
+
+
+  - variable: FIREBASE_PROJECT_ID
+    value: "gpc-obt-dev"
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: SESSION_COOKIE_MAX_AGE
+    value: 1209600000
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NODE_ENV
+    value: "dev"
+    availability:
+      - BUILD
+      - RUNTIME

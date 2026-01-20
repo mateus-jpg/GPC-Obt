@@ -4,6 +4,7 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '2mb',
     },
+    useCache: true,
   },
   redirects: async () => {
     return [
@@ -13,7 +14,7 @@ const nextConfig = {
         permanent: true,
       },
     ];
-  }
+  },
 };
 
 export default nextConfig;
