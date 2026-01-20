@@ -1,11 +1,13 @@
 'use server';
 
+import { unstable_cache } from 'next/cache';
 import admin from '@/lib/firebase/firebaseAdmin';
 import { randomUUID } from 'crypto';
 import path from 'path';
 import { stripHtml } from '@/utils/htmlSanitizer';
 import { requireUser, verifyUserPermissions } from '@/utils/server-auth';
 import { FILE_SIZE_LIMIT, ALLOWED_MIME_TYPES } from '@/utils/fileValidation';
+import { CACHE_TAGS, REVALIDATE, invalidateEventiCache } from '@/lib/cache';
 import { z } from 'zod';
 
 const adminDb = admin.firestore();
@@ -126,28 +128,17 @@ export async function createEventAction(payload) {
 
   await adminDb.collection('eventi').doc(eventId).set(eventData);
 
+  // Invalidate eventi cache after creating new event
+  invalidateEventiCache(anagraficaId);
+
   return { success: true, eventId, eventData };
 }
 
-
-
-export async function getEventsAction(anagraficaId) {
-  // Security: Use standardized auth helper
-  const { userUid } = await requireUser();
-
-  if (!anagraficaId) throw new Error('Missing anagraficaId');
-
-  const anagraficaRef = adminDb.collection('anagrafica').doc(anagraficaId);
-  const anagraficaSnap = await anagraficaRef.get();
-  if (!anagraficaSnap.exists) throw new Error('Anagrafica not found');
-
-  const anagraficaData = anagraficaSnap.data() || {};
-  const allowedStructures = anagraficaData.canBeAccessedBy || anagraficaData.structureIds || [];
-
-  // Security: Use standardized permission verification
-  await verifyUserPermissions({ userUid, allowedStructures });
-
-
+/**
+ * Internal function to fetch eventi from database
+ * Used by cached wrapper
+ */
+async function fetchEventiFromDb(anagraficaId) {
   const snap = await adminDb
     .collection('eventi')
     .where('anagraficaId', '==', anagraficaId)
@@ -163,6 +154,41 @@ export async function getEventsAction(anagraficaId) {
       ...data,
     });
   });
+
+  return eventi;
+}
+
+/**
+ * Get events for an anagrafica with caching
+ * Permission check runs fresh on every call (not cached)
+ */
+export async function getEventsAction(anagraficaId) {
+  // Security: Use standardized auth helper
+  const { userUid } = await requireUser();
+
+  if (!anagraficaId) throw new Error('Missing anagraficaId');
+
+  const anagraficaRef = adminDb.collection('anagrafica').doc(anagraficaId);
+  const anagraficaSnap = await anagraficaRef.get();
+  if (!anagraficaSnap.exists) throw new Error('Anagrafica not found');
+
+  const anagraficaData = anagraficaSnap.data() || {};
+  const allowedStructures = anagraficaData.canBeAccessedBy || anagraficaData.structureIds || [];
+
+  // Security: Permission check is NOT cached - always runs fresh
+  await verifyUserPermissions({ userUid, allowedStructures });
+
+  // Get cached eventi data
+  const getCachedEventi = unstable_cache(
+    async () => fetchEventiFromDb(anagraficaId),
+    [`eventi`, anagraficaId],
+    {
+      tags: [CACHE_TAGS.eventi(anagraficaId)],
+      revalidate: REVALIDATE.eventi,
+    }
+  );
+
+  const eventi = await getCachedEventi();
 
   return {
     success: true,

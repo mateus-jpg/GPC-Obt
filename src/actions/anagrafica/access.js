@@ -1,12 +1,13 @@
 'use server';
 
-import { headers } from 'next/headers';
+import { unstable_cache } from 'next/cache';
 import admin from '@/lib/firebase/firebaseAdmin';
 import { randomUUID } from 'crypto';
 import path from 'path';
 import { stripHtml } from '@/utils/htmlSanitizer';
 import { requireUser, verifyUserPermissions } from '@/utils/server-auth';
 import { FILE_SIZE_LIMIT, ALLOWED_MIME_TYPES } from '@/utils/fileValidation';
+import { CACHE_TAGS, REVALIDATE, invalidateAccessiCache } from '@/lib/cache';
 
 const adminDb = admin.firestore();
 const adminStorage = admin.storage();
@@ -21,7 +22,6 @@ export async function createAccessInternal({ anagraficaId, services, structureId
     if (svc.files && svc.files.length > 0) {
       for (const fileItem of svc.files) {
         // Handle both raw File objects (legacy/FormData) and new object structure with metadata/base64
-        let file = fileItem;
         let metadata = {
           nome: fileItem.name,
           dataCreazione: fileItem.creationDate,
@@ -133,6 +133,10 @@ export async function createAccessInternal({ anagraficaId, services, structureId
   };
 
   await accessRef.set(accessData);
+
+  // Invalidate accessi cache after creating new access
+  invalidateAccessiCache(anagraficaId);
+
   return { accessId, accessData };
 }
 
@@ -173,20 +177,11 @@ export async function createAccessAction(payload) {
   return { success: true, accessId, accessData };
 }
 
-export async function getAccessAction(anagraficaId) {
-  const { userUid } = await requireUser();
-  if (!anagraficaId) throw new Error('Missing anagraficaId');
-
-  const anagraficaRef = adminDb.collection('anagrafica').doc(anagraficaId);
-  const anagraficaSnap = await anagraficaRef.get();
-  if (!anagraficaSnap.exists) throw new Error('Anagrafica not found');
-
-  const anagraficaData = anagraficaSnap.data() || {};
-  const allowedStructures = anagraficaData.canBeAccessedBy || anagraficaData.structureIds || [];
-
-  // Check permissions
-  await verifyUserPermissions({ userUid, allowedStructures });
-
+/**
+ * Internal function to fetch accessi from database
+ * Used by cached wrapper
+ */
+async function fetchAccessiFromDb(anagraficaId) {
   const snap = await adminDb
     .collection('accessi')
     .where('anagraficaId', '==', anagraficaId)
@@ -226,6 +221,39 @@ export async function getAccessAction(anagraficaId) {
       });
     }
   });
+
+  return accessi;
+}
+
+/**
+ * Get access records for an anagrafica with caching
+ * Permission check runs fresh on every call (not cached)
+ */
+export async function getAccessAction(anagraficaId) {
+  const { userUid } = await requireUser();
+  if (!anagraficaId) throw new Error('Missing anagraficaId');
+
+  const anagraficaRef = adminDb.collection('anagrafica').doc(anagraficaId);
+  const anagraficaSnap = await anagraficaRef.get();
+  if (!anagraficaSnap.exists) throw new Error('Anagrafica not found');
+
+  const anagraficaData = anagraficaSnap.data() || {};
+  const allowedStructures = anagraficaData.canBeAccessedBy || anagraficaData.structureIds || [];
+
+  // Permission check is NOT cached - always runs fresh for security
+  await verifyUserPermissions({ userUid, allowedStructures });
+
+  // Get cached accessi data
+  const getCachedAccessi = unstable_cache(
+    async () => fetchAccessiFromDb(anagraficaId),
+    [`accessi`, anagraficaId],
+    {
+      tags: [CACHE_TAGS.accessi(anagraficaId)],
+      revalidate: REVALIDATE.accessi,
+    }
+  );
+
+  const accessi = await getCachedAccessi();
 
   return {
     success: true,
