@@ -1,6 +1,19 @@
 import { NextResponse } from "next/server";
 import { getCachedSession, setCachedSession } from "@/utils/session-cache";
 
+function sanitizeHeader(value) {
+  return (value || '').replace(/[\r\n]/g, '');
+}
+
+function createResponseWithUserHeaders(req, user) {
+  const headers = new Headers(req.headers);
+  headers.set('x-user-uid', sanitizeHeader(user.uid));
+  headers.set('x-user-email', sanitizeHeader(user.email));
+  if (user.role) headers.set('x-user-role', sanitizeHeader(user.role));
+  if (user.structureIds) headers.set('x-user-structures', JSON.stringify(user.structureIds));
+  return NextResponse.next({ request: { headers } });
+}
+
 export async function middleware(req) {
   const cookieName = process.env.SESSION_COOKIE_NAME || "session";
   const sessionCookie = req.cookies.get(cookieName)?.value;
@@ -23,23 +36,7 @@ export async function middleware(req) {
   // Check session cache first (reduces /api/auth/verify calls)
   const cachedUser = getCachedSession(sessionCookie);
   if (cachedUser) {
-    // Cache hit - use cached user data
-    const requestHeaders = new Headers(req.headers);
-    requestHeaders.set('x-user-uid', cachedUser.uid);
-    requestHeaders.set('x-user-email', cachedUser.email || '');
-    // Pass additional cached data to reduce downstream fetches
-    if (cachedUser.role) {
-      requestHeaders.set('x-user-role', cachedUser.role);
-    }
-    if (cachedUser.structureIds) {
-      requestHeaders.set('x-user-structures', JSON.stringify(cachedUser.structureIds));
-    }
-
-    return NextResponse.next({
-      request: {
-        headers: requestHeaders,
-      }
-    });
+    return createResponseWithUserHeaders(req, cachedUser);
   }
 
   // Cache miss - verify session via API
@@ -64,23 +61,7 @@ export async function middleware(req) {
     // Cache the verified session for future requests
     setCachedSession(sessionCookie, user);
 
-    // Pass user info to the page via request headers
-    const requestHeaders = new Headers(req.headers);
-    requestHeaders.set('x-user-uid', user.uid);
-    requestHeaders.set('x-user-email', user.email || '');
-    // Pass additional data to reduce downstream fetches
-    if (user.role) {
-      requestHeaders.set('x-user-role', user.role);
-    }
-    if (user.structureIds) {
-      requestHeaders.set('x-user-structures', JSON.stringify(user.structureIds));
-    }
-
-    return NextResponse.next({
-      request: {
-        headers: requestHeaders,
-      }
-    });
+    return createResponseWithUserHeaders(req, user);
 
   } catch (error) {
     // Session verification failed - redirect to login
@@ -90,6 +71,7 @@ export async function middleware(req) {
 
     // If verification fails, clear the invalid cookie and redirect
     const loginUrl = new URL("/login", req.url);
+    loginUrl.searchParams.set("from", pathname);
     const response = NextResponse.redirect(loginUrl);
     response.cookies.set(cookieName, "", { maxAge: -1, path: "/" });
 

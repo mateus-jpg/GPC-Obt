@@ -1,10 +1,42 @@
 'use client';
 
+import { useMemo } from 'react';
 import useSWR from 'swr';
 import { getAnagrafica } from '@/actions/anagrafica/anagrafica';
 import { getAccessAction } from '@/actions/anagrafica/access';
-import { getEventsAction } from '@/actions/anagrafica/events';
 import { SWR_CACHE_TIME } from '@/lib/swr-config';
+
+/**
+ * Stable fetcher for anagrafica data
+ * Extracted to prevent new function reference on each render
+ */
+async function anagraficaFetcher([, id]) {
+  const result = await getAnagrafica(id);
+  return JSON.parse(result);
+}
+
+/**
+ * Stable fetcher for accessi data
+ * Extracted to prevent new function reference on each render
+ */
+async function accessiFetcher([, anagraficaId]) {
+  return await getAccessAction(anagraficaId);
+}
+
+/**
+ * Default SWR options for anagrafica hooks
+ */
+const DEFAULT_ANAGRAFICA_OPTIONS = {
+  revalidateOnFocus: false,
+  dedupingInterval: SWR_CACHE_TIME.MEDIUM,
+  keepPreviousData: true,
+};
+
+const DEFAULT_ACCESSI_OPTIONS = {
+  revalidateOnFocus: false,
+  dedupingInterval: SWR_CACHE_TIME.SHORT,
+  keepPreviousData: true,
+};
 
 /**
  * Hook for fetching a single anagrafica record
@@ -15,17 +47,16 @@ import { SWR_CACHE_TIME } from '@/lib/swr-config';
  * @returns {Object} { anagrafica, error, isLoading, isValidating, mutate }
  */
 export function useAnagrafica(id, options = {}) {
+  // Memoize the merged options to prevent unnecessary re-renders
+  const swrOptions = useMemo(
+    () => ({ ...DEFAULT_ANAGRAFICA_OPTIONS, ...options }),
+    [options]
+  );
+
   const { data, error, isLoading, isValidating, mutate } = useSWR(
     id ? ['anagrafica', id] : null,
-    async () => {
-      const result = await getAnagrafica(id);
-      return JSON.parse(result);
-    },
-    {
-      revalidateOnFocus: false,
-      dedupingInterval: SWR_CACHE_TIME.MEDIUM,
-      ...options,
-    }
+    anagraficaFetcher,
+    swrOptions
   );
 
   return {
@@ -46,52 +77,25 @@ export function useAnagrafica(id, options = {}) {
  * @returns {Object} { accessi, error, isLoading, isValidating, mutate }
  */
 export function useAccessi(anagraficaId, options = {}) {
+  // Memoize the merged options to prevent unnecessary re-renders
+  const swrOptions = useMemo(
+    () => ({ ...DEFAULT_ACCESSI_OPTIONS, ...options }),
+    [options]
+  );
+
   const { data, error, isLoading, isValidating, mutate } = useSWR(
     anagraficaId ? ['accessi', anagraficaId] : null,
-    async () => {
-      return await getAccessAction(anagraficaId);
-    },
-    {
-      revalidateOnFocus: false,
-      dedupingInterval: SWR_CACHE_TIME.SHORT,
-      ...options,
-    }
+    accessiFetcher,
+    swrOptions
   );
 
-  return {
-    accessi: data?.accessi || [],
-    count: data?.count || 0,
-    error,
-    isLoading,
-    isValidating,
-    mutate,
-  };
-}
-
-/**
- * Hook for fetching events for an anagrafica
- * Uses server action with SWR for client-side caching
- *
- * @param {string} anagraficaId - The anagrafica document ID
- * @param {Object} options - Additional SWR options
- * @returns {Object} { eventi, error, isLoading, isValidating, mutate }
- */
-export function useEventi(anagraficaId, options = {}) {
-  const { data, error, isLoading, isValidating, mutate } = useSWR(
-    anagraficaId ? ['eventi', anagraficaId] : null,
-    async () => {
-      return await getEventsAction(anagraficaId);
-    },
-    {
-      revalidateOnFocus: false,
-      dedupingInterval: SWR_CACHE_TIME.SHORT,
-      ...options,
-    }
-  );
+  // Memoize the return object to prevent unnecessary re-renders in consumers
+  const accessi = useMemo(() => data?.accessi || [], [data?.accessi]);
+  const count = data?.count || 0;
 
   return {
-    eventi: data?.eventi || [],
-    count: data?.count || 0,
+    accessi,
+    count,
     error,
     isLoading,
     isValidating,

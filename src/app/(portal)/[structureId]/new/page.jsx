@@ -98,6 +98,7 @@ export default function AnagraficaForm({ params }) {
       const payload = {
         ...formData,
         registeredByStructure: structureId,
+        canBeAccessedBy: [structureId]
       };
 
       if (payload.referral.referral === "Altro" || payload.referral.referral === "Ente partner") {
@@ -139,7 +140,6 @@ export default function AnagraficaForm({ params }) {
       setIsSaving(false);
     }
   };
-  // ... rest of component
 
   return (
     <div className="min-h-screen">

@@ -3,6 +3,8 @@
  * Provides global defaults for all useSWR hooks
  */
 
+import { SWR as SWR_CONFIG } from '@/config/constants';
+
 /**
  * Default SWR fetcher function
  * Handles standard API responses and throws on error
@@ -23,35 +25,31 @@ export const fetcher = async (url) => {
 /**
  * Global SWR configuration options
  * Applied to all useSWR hooks unless overridden
+ * @see config/constants.js for centralized configuration
  */
 export const swrConfig = {
   fetcher,
   // Revalidation settings
-  revalidateOnFocus: false,       // Don't refetch when window regains focus
-  revalidateOnReconnect: true,    // Refetch when browser regains connection
-  revalidateIfStale: true,        // Use stale data while revalidating
-  dedupingInterval: 5000,         // Dedupe requests within 5 seconds
+  revalidateOnFocus: false,
+  revalidateOnReconnect: true,
+  revalidateIfStale: true,
+  dedupingInterval: SWR_CONFIG.DEDUPING_INTERVAL,
 
   // Cache settings
-  refreshInterval: 0,             // No automatic refresh (data is relatively static)
+  refreshInterval: 0,
 
   // Error handling
   shouldRetryOnError: true,
-  errorRetryCount: 3,
-  errorRetryInterval: 5000,
+  errorRetryCount: SWR_CONFIG.ERROR_RETRY_COUNT,
+  errorRetryInterval: SWR_CONFIG.ERROR_RETRY_INTERVAL,
 
   // Performance
-  suspense: false,                // Don't use React Suspense by default
-  keepPreviousData: true,         // Show previous data while fetching new data
+  suspense: false,
+  keepPreviousData: true,
 };
 
 /**
  * Cache time constants (in milliseconds)
- * For use with useSWR's refreshInterval option
+ * @see config/constants.js for centralized configuration
  */
-export const SWR_CACHE_TIME = {
-  SHORT: 30 * 1000,      // 30 seconds
-  MEDIUM: 60 * 1000,     // 1 minute
-  LONG: 5 * 60 * 1000,   // 5 minutes
-  VERY_LONG: 10 * 60 * 1000, // 10 minutes
-};
+export const SWR_CACHE_TIME = SWR_CONFIG.CACHE_TIME;

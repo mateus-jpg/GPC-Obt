@@ -12,8 +12,6 @@ import { Button } from "@/components/ui/button";
 import AccessDialog from "@/components/Anagrafica/AccessDialog/AccessDialog";
 import { getAccessAction } from "@/actions/anagrafica/access";
 import AccessInfo from "@/components/Anagrafica/AccessInfo";
-import { getEventsAction } from "@/actions/anagrafica/events";
-import EventInfo from "@/components/Anagrafica/EventInfo";
 import { getAnagrafica } from "@/actions/anagrafica/anagrafica";
 
 async function canUserAccess(anagrafica, userID) {
@@ -53,15 +51,8 @@ export default async function AnagraficaViewPage({ params }) {
     return notFound();
   }
 
-  // Fetch accessi and eventi in parallel (these also use caching)
-  const [anagraficaAccesses, anagraficaEvents] = await Promise.all([
-    getAccessAction(id),
-    getEventsAction(id),
-  ]);
-
-  console.log(anagrafica)
-  console.log(anagraficaAccesses)
-  console.log(anagraficaEvents)
+  // Fetch accessi (uses caching)
+  const anagraficaAccesses = await getAccessAction(id);
 
   if (!anagrafica) {
     return notFound();
@@ -166,10 +157,8 @@ export default async function AnagraficaViewPage({ params }) {
       </div>
       <Otherinfo anagrafica={anagrafica} />
       {anagraficaAccesses && (
-        <>
-          <AccessInfo accesses={anagraficaAccesses.accessi} />
-          <EventInfo events={anagraficaEvents.eventi} />
-        </>)}
+        <AccessInfo accesses={anagraficaAccesses.accessi} />
+      )}
     </div>
 
   );

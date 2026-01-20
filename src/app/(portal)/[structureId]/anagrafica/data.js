@@ -23,7 +23,6 @@ async function fetchAnagraficaListFromDb(structureId) {
       ...JSON.parse(JSON.stringify(d)),
     };
   });
-
   return snapshot;
 }
 

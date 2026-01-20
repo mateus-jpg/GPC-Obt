@@ -5,6 +5,7 @@
 
 import { unstable_cache } from 'next/cache';
 import { revalidateTag } from 'next/cache';
+import { CACHE as CACHE_CONFIG } from '@/config/constants';
 
 /**
  * Cache tag generators for consistent cache key naming
@@ -23,22 +24,18 @@ export const CACHE_TAGS = {
 
   // Access records (services)
   accessi: (anagraficaId) => `accessi-${anagraficaId}`,
-
-  // Events
-  eventi: (anagraficaId) => `eventi-${anagraficaId}`,
 };
 
 /**
  * Revalidation times in seconds
- * Short TTLs ensure data freshness while reducing Firestore queries
+ * @see config/constants.js for centralized configuration
  */
 export const REVALIDATE = {
-  userProfile: 300,      // 5 minutes
-  structure: 600,        // 10 minutes
-  anagraficaList: 60,    // 1 minute
-  anagraficaDetail: 120, // 2 minutes
-  accessi: 60,           // 1 minute
-  eventi: 60,            // 1 minute
+  userProfile: CACHE_CONFIG.REVALIDATE.USER_PROFILE,
+  structure: CACHE_CONFIG.REVALIDATE.STRUCTURE,
+  anagraficaList: CACHE_CONFIG.REVALIDATE.ANAGRAFICA_LIST,
+  anagraficaDetail: CACHE_CONFIG.REVALIDATE.ANAGRAFICA_DETAIL,
+  accessi: CACHE_CONFIG.REVALIDATE.ACCESSI,
 };
 
 /**
@@ -51,9 +48,8 @@ export function invalidateAnagraficaCaches(anagraficaId, structureIds = []) {
   // Invalidate the specific anagrafica detail cache
   revalidateTag(CACHE_TAGS.anagrafica(anagraficaId));
 
-  // Invalidate accessi and eventi caches for this anagrafica
+  // Invalidate accessi cache for this anagrafica
   revalidateTag(CACHE_TAGS.accessi(anagraficaId));
-  revalidateTag(CACHE_TAGS.eventi(anagraficaId));
 
   // Invalidate all affected structure list caches
   for (const structureId of structureIds) {
@@ -67,14 +63,6 @@ export function invalidateAnagraficaCaches(anagraficaId, structureIds = []) {
  */
 export function invalidateAccessiCache(anagraficaId) {
   revalidateTag(CACHE_TAGS.accessi(anagraficaId));
-}
-
-/**
- * Helper to invalidate event-related caches
- * @param {string} anagraficaId - The anagrafica document ID
- */
-export function invalidateEventiCache(anagraficaId) {
-  revalidateTag(CACHE_TAGS.eventi(anagraficaId));
 }
 
 /**

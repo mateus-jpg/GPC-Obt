@@ -4,13 +4,17 @@
  *
  * Important: This cache runs in the Edge Runtime (middleware)
  * - Uses simple Map-based storage (no external dependencies)
- * - Short TTL (60s) balances security with performance
+ * - Short TTL balances security with performance
  * - Cache is cleared on server restart
+ *
+ * @see config/constants.js for centralized configuration
  */
 
-// Session cache configuration
-const SESSION_CACHE_TTL = 60 * 1000; // 60 seconds in milliseconds
-const MAX_CACHE_SIZE = 1000; // Maximum number of cached sessions
+import { AUTH } from '@/config/constants';
+
+// Session cache configuration (from centralized config)
+const SESSION_CACHE_TTL = AUTH.SESSION_CACHE_TTL;
+const MAX_CACHE_SIZE = AUTH.SESSION_CACHE_MAX_SIZE;
 
 // In-memory cache store
 const sessionCache = new Map();

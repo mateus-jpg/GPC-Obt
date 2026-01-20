@@ -10,7 +10,7 @@ import { serializeFirestoreData } from '@/lib/utils';
 /**
  * Lists all users in the system.
  * Requires super admin privileges.
- * 
+ *
  * @param {number} maxResults - Maximum number of results to return
  * @param {string} pageToken - Pagination token
  * @returns {Promise<{users: Array, pageToken: string}>}
@@ -25,62 +25,37 @@ export async function listAllUsers(maxResults = 100, pageToken) {
         // Fetch users using Firebase Admin SDK
         const result = await auth.listUsers(maxResults, pageToken);
 
-        // Serialize the UserRecord objects so they can be passed to the client
-        const users = result.users.map((user) => ({
-            uid: user.uid,
-            email: user.email,
-            displayName: user.displayName,
-            photoURL: user.photoURL,
-            disabled: user.disabled,
-            customClaims: user.customClaims || {},
-            metadata: {
-                creationTime: user.metadata.creationTime,
-                lastSignInTime: user.metadata.lastSignInTime,
-            },
-        }));
+        // Get operator data for each user
+        const usersWithOperatorData = await Promise.all(
+            result.users.map(async (user) => {
+                const operatorDoc = await collections.operators().doc(user.uid).get();
+                const operatorData = operatorDoc.exists ? operatorDoc.data() : {};
 
-        logger.info('Listed all users', { count: users.length, actorUid: userUid });
+                return {
+                    uid: user.uid,
+                    email: user.email,
+                    displayName: user.displayName,
+                    photoURL: user.photoURL,
+                    disabled: user.disabled,
+                    role: operatorData.role || 'user',
+                    structureIds: operatorData.structureIds || [],
+                    metadata: {
+                        creationTime: user.metadata.creationTime,
+                        lastSignInTime: user.metadata.lastSignInTime,
+                    },
+                };
+            })
+        );
+
+        logger.info('Listed all users', { count: usersWithOperatorData.length, actorUid: userUid });
 
         return {
-            users,
+            users: usersWithOperatorData,
             pageToken: result.pageToken,
         };
     } catch (error) {
         logger.error('Error listing users', error);
         throw new Error('Failed to list users.');
-    }
-}
-
-/**
- * Sets custom claims for a specific user.
- * Requires super admin privileges.
- * 
- * @param {string} targetUid - UID of user to modify claims for
- * @param {Object} claims - Custom claims object to set
- * @returns {Promise<{success: boolean, error?: string}>}
- */
-export async function setUserClaims(targetUid, claims) {
-    try {
-        // Ensure the caller is authenticated and is a super admin
-        const { userUid } = await requireUser();
-        await verifySuperAdmin({ userUid });
-
-        await auth.setCustomUserClaims(targetUid, claims);
-
-        // Log the permission change to audit trail
-        await logPermissionChange({
-            actorUid: userUid,
-            targetUid,
-            changeType: 'set_claims',
-            details: { claims }
-        });
-
-        logger.info('Set user claims', { actorUid: userUid, targetUid, claims });
-
-        return { success: true };
-    } catch (error) {
-        logger.error('Error setting user claims', error, { targetUid });
-        return { success: false, error: error.message };
     }
 }
 
@@ -116,13 +91,6 @@ export async function createUser(userData) {
             displayName: displayName || email.split('@')[0],
             disabled: false,
         });
-
-        // Set custom claims
-        const claims = {
-            role,
-            structureIds,
-        };
-        await auth.setCustomUserClaims(userRecord.uid, claims);
 
         // Create operator document in Firestore
         await collections.operators().doc(userRecord.uid).set({
@@ -177,7 +145,6 @@ export async function getUser(targetUid) {
             displayName: authUser.displayName,
             photoURL: authUser.photoURL,
             disabled: authUser.disabled,
-            customClaims: authUser.customClaims || {},
             metadata: {
                 creationTime: authUser.metadata.creationTime,
                 lastSignInTime: authUser.metadata.lastSignInTime,
@@ -230,13 +197,6 @@ export async function updateUser(targetUid, data) {
         if (email) firestoreUpdates.email = email;
 
         await collections.operators().doc(targetUid).update(firestoreUpdates);
-
-        // If role changed, update claims
-        if (role) {
-            const currentUser = await auth.getUser(targetUid);
-            const currentClaims = currentUser.customClaims || {};
-            await auth.setCustomUserClaims(targetUid, { ...currentClaims, role });
-        }
 
         await logAdminAction({
             action: 'update_user',
@@ -297,14 +257,6 @@ export async function addUserToStructure(targetUid, structureId) {
             updatedBy: userUid,
         });
 
-        // Update custom claims
-        const authUser = await auth.getUser(targetUid);
-        const currentClaims = authUser.customClaims || {};
-        await auth.setCustomUserClaims(targetUid, {
-            ...currentClaims,
-            structureIds: newStructureIds,
-        });
-
         await logPermissionChange({
             actorUid: userUid,
             targetUid,
@@ -356,14 +308,6 @@ export async function removeUserFromStructure(targetUid, structureId) {
             structureIds: newStructureIds,
             updatedAt: new Date(),
             updatedBy: userUid,
-        });
-
-        // Update custom claims
-        const authUser = await auth.getUser(targetUid);
-        const currentClaims = authUser.customClaims || {};
-        await auth.setCustomUserClaims(targetUid, {
-            ...currentClaims,
-            structureIds: newStructureIds,
         });
 
         await logPermissionChange({

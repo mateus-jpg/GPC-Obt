@@ -39,7 +39,6 @@ export const mockUserRecord = {
   displayName: 'Test User',
   photoURL: null,
   disabled: false,
-  customClaims: { role: 'user', structureIds: ['structure-1'] },
   metadata: {
     creationTime: '2024-01-01T00:00:00Z',
     lastSignInTime: '2024-01-15T00:00:00Z',
@@ -52,7 +51,6 @@ export const mockAuth = {
   getUser: vi.fn(() => Promise.resolve(mockUserRecord)),
   updateUser: vi.fn(() => Promise.resolve(mockUserRecord)),
   deleteUser: vi.fn(() => Promise.resolve()),
-  setCustomUserClaims: vi.fn(() => Promise.resolve()),
   listUsers: vi.fn(() => Promise.resolve({
     users: [mockUserRecord],
     pageToken: undefined,
