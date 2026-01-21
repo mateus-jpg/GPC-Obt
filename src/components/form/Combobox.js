@@ -59,8 +59,8 @@ export function CreateCombobox({ label, value, onChange, options, placeholder })
             className="justify-between w-full"
           >
             {value
-              ? value.length > 50
-                ? value.slice(0, 50) + "…"
+              ? value.length > 20
+                ? value.slice(0, 20) + "…"
                 : value
               : placeholder}
           </Button>
