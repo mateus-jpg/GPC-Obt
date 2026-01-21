@@ -19,7 +19,7 @@ import {
 import Logo from "./Logo"
 
 import { useRouter } from "next/navigation"
-export function StructureSwitcher({ structures, selectedStructure }) {
+export function StructureSwitcher({ structures, selectedStructure, user}) {
   const { isMobile } = useSidebar()
   const router = useRouter()
 

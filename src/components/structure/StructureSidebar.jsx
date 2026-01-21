@@ -14,10 +14,13 @@ import {
   IconInnerShadowTop,
   IconListDetails,
   IconReport,
+  IconUsersGroup,
   IconSearch,
   IconSettings,
+  IconCategoryPlus,
   IconUsers,
   IconBell,
+  IconInfoCircle
 } from "@tabler/icons-react"
 
 import { NavDocuments } from "@/components/nav-documents"
@@ -38,6 +41,7 @@ import { useAuth } from "@/context/AuthContext"
 import Logo from "../Logo"
 import { useParams } from "next/navigation"
 import { Skeleton } from "@mui/material"
+import { NavStructures } from "../nav-structures"
 
 
 const data = {
@@ -103,6 +107,25 @@ const data = {
       ],
     },
   ],
+  structures: [
+    {
+      title: "Informazioni Struttura",
+      url: "admin",
+      icon: IconInfoCircle,
+    },
+    {
+      title: "Operatori",
+      url: "admin/users",
+      icon: IconUsersGroup,
+    },
+    {
+      title: "Gestione Categorie",
+      url: "admin/categories",
+      icon: IconCategoryPlus,
+    },
+    
+  ]
+  ,
   navSecondary: [
     {
       title: "Settings",
@@ -152,10 +175,12 @@ export function StructureSidebar({
       const structure = availableStructures.find(s => s.id === structureId);
       if (structure) {
         setCurrentStructure(structure);
+        console.log(structure)
       }
 
     }
   }, [structureId, availableStructures]);
+
 
   return (
     <Sidebar collapsible="offcanvas" {...props}>
@@ -170,6 +195,7 @@ export function StructureSidebar({
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
+
             {availableStructures ? <StructureSwitcher structures={availableStructures} selectedStructure={currentStructure} /> : 
             <Skeleton variant="rectangular" width={210} height={40} className="rounded-lg" />
             }
@@ -180,7 +206,9 @@ export function StructureSidebar({
         {currentStructure && 
         <>
         <NavMain items={data.navMain} structureId={currentStructure.id} />
-        <NavDocuments items={data.documents} />
+        {!loading && user && currentStructure.admins.includes(user.uid) &&
+          <NavStructures structureId={currentStructure.id} items={data.structures} />
+        }
       </>
 }
       {/*   <NavSecondary items={data.navSecondary} className="mt-auto" /> */}

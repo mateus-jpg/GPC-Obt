@@ -54,7 +54,7 @@ export default async function StructureAdminPage({ params }) {
                         <Link href={`/${structureId}/admin/categories`}>Gestione Categorie</Link>
                     </Button>
                     <Button asChild variant="outline">
-                        <Link href={`/${structureId}/admin/users`}>Manage Users & Admins</Link>
+                        <Link href={`/${structureId}/admin/users`}>Gestione Operatori</Link>
                     </Button>
                 </div>
             </div>

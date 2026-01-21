@@ -13,6 +13,7 @@ import {
   IconHelp,
   IconInnerShadowTop,
   IconListDetails,
+  IconUsersGroup,
   IconReport,
   IconSearch,
   IconSettings,
@@ -23,6 +24,7 @@ import {
 import { NavDocuments } from "@/components/nav-documents"
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
+import { NavStructures } from "./nav-structures"
 import { NavUser } from "@/components/nav-user"
 import {
   Sidebar,
@@ -36,6 +38,7 @@ import {
 
 import { useAuth } from "@/context/AuthContext"
 import Logo from "./Logo"
+import { NavStrutture } from "./nav-structures"
 
 const data = {
 
@@ -117,6 +120,15 @@ const data = {
       icon: IconSearch,
     },
   ],
+  structures: [
+    {
+      title: "Operatori",
+      url: "#",
+      name: "operators",
+      icon: IconUsersGroup,
+    }
+  ]
+  ,
   documents: [
     {
       name: "Archivio Generale",
@@ -150,6 +162,7 @@ export function PortalSideBar({
           <SidebarMenuItem>
             <SidebarMenuButton asChild className="data-[slot=sidebar-menu-button]:!p-1.5">
               <a href="#">
+                
                 <Logo className="!size-8" size={89} />
                 <span className="text-base font-semibold">GPC - OBT</span>
               </a>
@@ -159,7 +172,7 @@ export function PortalSideBar({
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} structureId={structureId} />
-        <NavDocuments items={data.documents} />
+        <NavStructures items={data.structures} />
       {/*   <NavSecondary items={data.navSecondary} className="mt-auto" /> */}
       </SidebarContent>
       <SidebarFooter>
