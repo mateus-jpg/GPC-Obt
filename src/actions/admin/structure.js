@@ -1,9 +1,9 @@
 'use server';
 
-import { requireUser, verifyUserPermissions, verifyStructureAdmin } from '@/utils/server-auth';
+import { requireUser, verifyUserPermissions, verifyStructureAdmin, verifySuperAdmin } from '@/utils/server-auth';
 import { collections, serializeFirestoreDoc } from '@/utils/database';
 import { logger } from '@/utils/logger';
-import { logResourceModification } from '@/utils/audit';
+import { logResourceModification, logAdminAction } from '@/utils/audit';
 import { serializeFirestoreData } from '@/lib/utils';
 import { AccessTypes as DefaultAccessTypes } from '@/components/Anagrafica/AccessDialog/AccessTypes';
 
@@ -441,6 +441,65 @@ export async function resetStructureCategoriesToDefaults(structureId) {
         return { success: true };
     } catch (error) {
         logger.error('Error resetting structure categories', error, { structureId });
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Creates a new structure.
+ * Requires Super Admin privileges.
+ *
+ * @param {Object} data - Structure data
+ * @param {string} data.name - Structure name (required)
+ * @param {string} [data.email] - Structure email
+ * @param {string} [data.address] - Structure address
+ * @param {string} [data.city] - Structure city
+ * @param {string} [data.phone] - Structure phone
+ * @param {string} [data.description] - Structure description
+ * @returns {Promise<{success: boolean, structureId?: string, error?: string}>}
+ */
+export async function createStructure(data) {
+    try {
+        const { userUid } = await requireUser();
+
+        // Only super admins can create structures
+        await verifySuperAdmin({ userUid });
+
+        // Validate required fields
+        if (!data || !data.name || typeof data.name !== 'string' || !data.name.trim()) {
+            return { success: false, error: 'Structure name is required' };
+        }
+
+        const structureData = {
+            name: data.name.trim(),
+            email: data.email?.trim() || '',
+            address: data.address?.trim() || '',
+            city: data.city?.trim() || '',
+            phone: data.phone?.trim() || '',
+            description: data.description?.trim() || '',
+            admins: [],
+            accessCategories: JSON.parse(JSON.stringify(DefaultAccessTypes)),
+            createdAt: new Date(),
+            createdBy: userUid,
+            updatedAt: new Date(),
+            updatedBy: userUid,
+        };
+
+        // Create the structure document
+        const docRef = await collections.structures().add(structureData);
+
+        // Log the action
+        await logAdminAction({
+            action: 'create_structure',
+            actorUid: userUid,
+            details: { structureId: docRef.id, name: structureData.name }
+        });
+
+        logger.info('Created new structure', { actorUid: userUid, structureId: docRef.id, name: structureData.name });
+
+        return { success: true, structureId: docRef.id };
+    } catch (error) {
+        logger.error('Error creating structure', error);
         return { success: false, error: error.message };
     }
 }

@@ -196,7 +196,7 @@ export function StructureSidebar({
           </SidebarMenuItem>
           <SidebarMenuItem>
 
-            {availableStructures ? <StructureSwitcher structures={availableStructures} selectedStructure={currentStructure} /> : 
+            {availableStructures ? <StructureSwitcher structures={availableStructures} selectedStructure={currentStructure} user={user} /> :
             <Skeleton variant="rectangular" width={210} height={40} className="rounded-lg" />
             }
           </SidebarMenuItem>

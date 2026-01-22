@@ -119,8 +119,8 @@ export const CreateCombobox = memo(function CreateCombobox({ label, value, onCha
       <Label>{label}</Label>
       <Popover open={open} modal={false} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
-          <Button variant="outline" role="combobox" className="justify-between w-full">
-            {value ? truncateText(value) : placeholder}
+          <Button variant="outline" role="combobox" className="justify-between w-full overflow-hidden text-ellipsis whitespace-nowrap">
+            <span className="truncate">{value ? truncateText(value) : placeholder}</span>
           </Button>
         </PopoverTrigger>
         <PopoverContent>
@@ -274,8 +274,8 @@ export const Combobox = memo(function Combobox({ label, value, onChange, options
       <Label>{label}</Label>
       <Popover open={open} modal={false} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button variant="outline" role="combobox" className="justify-between w-full">
-            {value ? truncateText(value) : placeholder}
+          <Button variant="outline" role="combobox" className="justify-between w-full overflow-hidden text-ellipsis whitespace-nowrap">
+            <span className="truncate">{value ? truncateText(value) : placeholder}</span>
           </Button>
         </PopoverTrigger>
         <PopoverContent>
@@ -330,7 +330,7 @@ export const MultiCombobox = memo(function MultiCombobox({ label, values = [], o
       <Label>{label}</Label>
       <Popover open={open} modal={false} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button variant="outline" role="combobox" aria-expanded={open} className="justify-between w-full">
+          <Button variant="outline" role="combobox" aria-expanded={open} className="justify-between w-full overflow-hidden text-ellipsis whitespace-nowrap">
             <span className="truncate">{displayText}</span>
           </Button>
         </PopoverTrigger>

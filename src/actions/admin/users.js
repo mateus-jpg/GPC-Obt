@@ -327,25 +327,69 @@ export async function removeUserFromStructure(targetUid, structureId) {
 }
 
 /**
- * Lists all structures in the system.
- * Requires super admin privileges.
+ * Lists structures in the system.
+ * Super admins see all structures.
+ * Non-admin users see only structures they are operators of.
  *
  * @returns {Promise<{success: boolean, structures?: Array, error?: string}>}
  */
 export async function listAllStructures() {
     try {
         const { userUid } = await requireUser();
-        await verifySuperAdmin({ userUid });
 
-        const snapshot = await collections.structures().get();
+        // Get user document to check role and structureIds
+        const operatorDoc = await collections.operators().doc(userUid).get();
 
-        const structures = snapshot.docs.map(doc => ({
-            id: doc.id,
-            name: doc.data().name || doc.id,
-            ...serializeFirestoreDoc(doc.data()),
-        }));
+        if (!operatorDoc.exists) {
+            return { success: false, error: 'User not found' };
+        }
 
-        logger.info('Listed all structures', { count: structures.length, actorUid: userUid });
+        const operatorData = operatorDoc.data();
+        const isAdmin = operatorData.role === 'admin';
+
+        let structures = [];
+
+        if (isAdmin) {
+            // Super admins see all structures
+            const snapshot = await collections.structures().get();
+            structures = snapshot.docs.map(doc => ({
+                id: doc.id,
+                name: doc.data().name || doc.id,
+                ...serializeFirestoreDoc(doc.data()),
+            }));
+        } else {
+            // Non-admin users see only structures they are operators of
+            const userStructureIds = operatorData.structureIds || [];
+
+            if (userStructureIds.length === 0) {
+                return { success: true, structures: [] };
+            }
+
+            // Firestore 'in' queries support up to 30 items, batch if needed
+            const batchSize = 30;
+            const batches = [];
+
+            for (let i = 0; i < userStructureIds.length; i += batchSize) {
+                const batch = userStructureIds.slice(i, i + batchSize);
+                batches.push(batch);
+            }
+
+            for (const batch of batches) {
+                const snapshot = await collections.structures()
+                    .where('__name__', 'in', batch)
+                    .get();
+
+                const batchStructures = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    name: doc.data().name || doc.id,
+                    ...serializeFirestoreDoc(doc.data()),
+                }));
+
+                structures.push(...batchStructures);
+            }
+        }
+
+        logger.info('Listed structures', { count: structures.length, actorUid: userUid, isAdmin });
 
         return { success: true, structures };
     } catch (error) {

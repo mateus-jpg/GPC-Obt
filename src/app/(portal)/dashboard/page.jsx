@@ -1,29 +1,15 @@
 'use client';
 
-import { useState, useEffect } from "react";
-import { collection, getDocs, query, where } from "firebase/firestore";
-import { db } from "@/lib/firebase/firebaseClient";
-import { SectionCards } from "@/components/section-cards";
+import { useAuth } from "@/context/AuthContext";
 import { Card, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
-export default function Page() {
-  const [structures, setStructures] = useState([]);
-  const [cardsData, setCardsData] = useState([]);
 
-  // Fetch structures assigned to the user
-  useEffect(() => {
-    const fetchStructures = async () => {
-      try {
-        const snapshot = await getDocs(collection(db, "structures"));
-        const structuresList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        console.log("Fetched structures:", structuresList);
-        setStructures(structuresList);
-      } catch (err) {
-        console.error("Error fetching structures:", err);
-      }
-    };
-    fetchStructures();
-  }, []);
+export default function Page() {
+  const { availableStructures } = useAuth();
+
+  // For admin users, we need to fetch all structures
+  // For non-admin users, availableStructures already contains only their assigned structures
+  const structures = availableStructures;
 
 
 

@@ -106,14 +106,22 @@ export const AuthProvider = ({ children }) => {
         if (operatorDoc.exists()) {
           fullUser = { ...fullUser, ...operatorDoc.data() };
 
-          const structureIds = fullUser.structureIds || [];
-          if (structureIds.length > 0) {
-            const structuresData = await getDocs(
-              query(collection(db, "structures"), where("__name__", "in", structureIds))
-            );
+          // Admin users can see all structures, non-admin users only see their assigned structures
+          if (fullUser.role === 'admin') {
+            const structuresData = await getDocs(collection(db, "structures"));
             structures = structuresData.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            console.log("Fetched structures data with IDs:", structures);
+            console.log("Admin user - fetched all structures:", structures);
             setAvailableStructures(structures);
+          } else {
+            const structureIds = fullUser.structureIds || [];
+            if (structureIds.length > 0) {
+              const structuresData = await getDocs(
+                query(collection(db, "structures"), where("__name__", "in", structureIds))
+              );
+              structures = structuresData.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+              console.log("Fetched structures data with IDs:", structures);
+              setAvailableStructures(structures);
+            }
           }
         } else {
           console.warn("Operator document not found for", operatorId);

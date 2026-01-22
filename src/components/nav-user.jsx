@@ -6,6 +6,9 @@ import {
   IconLogout,
   IconNotification,
   IconUserCircle,
+  IconUserPlus,
+  IconUsers,
+  IconSettings,
 } from "@tabler/icons-react"
 
 import {
@@ -105,6 +108,25 @@ export function NavUser({
                 Profile
               </DropdownMenuItem>
             </DropdownMenuGroup>
+            {user?.role === 'admin' && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuItem onClick={() => router.push("/admin/users/new")}>
+                    <IconUserPlus />
+                    Crea utente
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => router.push("/admin/users")}>
+                    <IconUsers />
+                    Gestisci utenti
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => router.push("/admin")}>
+                    <IconSettings />
+                    Admin Dashboard
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={async () => {

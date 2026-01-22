@@ -4,12 +4,37 @@ import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar"
-import { AuthProvider } from "@/context/AuthContext";
+import { redirect } from "next/navigation";
+import { requireUser, verifyUserPermissions } from "@/utils/server-auth";
+import { collections } from "@/utils/database";
 
+async function validateStructureAccess(structureId) {
+  try {
+    // Check if structure exists
+    const structureDoc = await collections.structures().doc(structureId).get();
+    if (!structureDoc.exists) {
+      return { valid: false, reason: 'not_found' };
+    }
 
+    // Check if user has access
+    const { userUid } = await requireUser();
+    await verifyUserPermissions({ userUid, structureId });
+
+    return { valid: true };
+  } catch (error) {
+    return { valid: false, reason: 'no_access' };
+  }
+}
 
 export default async function Layout({ children, params }) {
   const { structureId } = await params;
+
+  // Validate structure exists and user has access
+  const { valid } = await validateStructureAccess(structureId);
+  if (!valid) {
+    redirect('/');
+  }
+
   return (
     <>
       <StructureSidebar variant="inset"/>
@@ -24,6 +49,5 @@ export default async function Layout({ children, params }) {
         </div>
       </SidebarInset>
     </>
-
   );
 }

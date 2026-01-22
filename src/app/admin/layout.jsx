@@ -11,9 +11,10 @@ export default function AdminLayout({ children }) {
                         <Button asChild variant="ghost">
                             <Link href="/admin/users">Users</Link>
                         </Button>
-                        <Button asChild variant="default" size="sm">
-                            <Link href="/admin/users/new">Create User</Link>
+                        <Button asChild variant="ghost">
+                            <Link href="/admin/structures">Structures</Link>
                         </Button>
+
                         <Button asChild variant="ghost">
                             <Link href="/">Back to App</Link>
                         </Button>
