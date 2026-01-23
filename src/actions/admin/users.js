@@ -6,6 +6,7 @@ import { collections, serializeFirestoreDoc } from '@/utils/database';
 import { logger } from '@/utils/logger';
 import { logPermissionChange, logAdminAction } from '@/utils/audit';
 import { serializeFirestoreData } from '@/lib/utils';
+import { invalidateUserProfileCache, invalidateStructureCache } from '@/lib/cache';
 
 /**
  * Lists all users in the system.
@@ -73,6 +74,8 @@ export async function listAllUsers(maxResults = 100, pageToken) {
  * @returns {Promise<{success: boolean, uid?: string, error?: string}>}
  */
 export async function createUser(userData) {
+    let createdAuthUser = null;
+
     try {
         const { userUid } = await requireUser();
         await verifySuperAdmin({ userUid });
@@ -91,6 +94,9 @@ export async function createUser(userData) {
             displayName: displayName || email.split('@')[0],
             disabled: false,
         });
+
+        // Track created user for rollback if needed
+        createdAuthUser = userRecord;
 
         // Create operator document in Firestore
         await collections.operators().doc(userRecord.uid).set({
@@ -116,6 +122,17 @@ export async function createUser(userData) {
         return { success: true, uid: userRecord.uid };
     } catch (error) {
         logger.error('Error creating user', error);
+
+        // Rollback: If Auth user was created but Firestore failed, delete the Auth user
+        if (createdAuthUser) {
+            try {
+                await auth.deleteUser(createdAuthUser.uid);
+                logger.info('Rolled back Auth user creation after Firestore failure', { uid: createdAuthUser.uid });
+            } catch (rollbackError) {
+                logger.error('Failed to rollback Auth user creation', rollbackError, { uid: createdAuthUser.uid });
+            }
+        }
+
         return { success: false, error: error.message };
     }
 }
@@ -264,6 +281,10 @@ export async function addUserToStructure(targetUid, structureId) {
             details: { structureId, newStructureIds }
         });
 
+        // Invalidate caches for the affected user and structure
+        invalidateUserProfileCache(targetUid);
+        invalidateStructureCache(structureId);
+
         logger.info('Added user to structure', { actorUid: userUid, targetUid, structureId });
 
         return { success: true };
@@ -316,6 +337,10 @@ export async function removeUserFromStructure(targetUid, structureId) {
             changeType: 'remove_structure',
             details: { structureId, newStructureIds }
         });
+
+        // Invalidate caches for the affected user and structure
+        invalidateUserProfileCache(targetUid);
+        invalidateStructureCache(structureId);
 
         logger.info('Removed user from structure', { actorUid: userUid, targetUid, structureId });
 
@@ -374,17 +399,22 @@ export async function listAllStructures() {
                 batches.push(batch);
             }
 
-            for (const batch of batches) {
-                const snapshot = await collections.structures()
-                    .where('__name__', 'in', batch)
-                    .get();
+            // Execute all batch queries in parallel for better performance
+            const batchResults = await Promise.all(
+                batches.map(batch =>
+                    collections.structures()
+                        .where('__name__', 'in', batch)
+                        .get()
+                )
+            );
 
+            // Flatten results from all batches
+            for (const snapshot of batchResults) {
                 const batchStructures = snapshot.docs.map(doc => ({
                     id: doc.id,
                     name: doc.data().name || doc.id,
                     ...serializeFirestoreDoc(doc.data()),
                 }));
-
                 structures.push(...batchStructures);
             }
         }

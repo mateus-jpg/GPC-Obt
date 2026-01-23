@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto';
 import path from 'path';
 import { stripHtml } from '@/utils/htmlSanitizer';
 import { requireUser, verifyUserPermissions } from '@/utils/server-auth';
-import { FILE_SIZE_LIMIT, ALLOWED_MIME_TYPES } from '@/utils/fileValidation';
+import { FILE_SIZE_LIMIT, ALLOWED_MIME_TYPES, validateFileSignature } from '@/utils/fileValidation';
 import { CACHE_TAGS, REVALIDATE, invalidateAccessiCache } from '@/lib/cache';
 
 const adminDb = admin.firestore();
@@ -68,6 +68,12 @@ export async function createAccessInternal({ anagraficaId, services, structureId
         // Security: Validate MIME type
         if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
           throw new Error(`File type ${mimeType} is not allowed`);
+        }
+
+        // Security: Validate file content matches claimed MIME type (magic number check)
+        // This prevents MIME type spoofing attacks
+        if (!validateFileSignature(buffer, mimeType)) {
+          throw new Error(`File ${originalName} content does not match claimed type ${mimeType}`);
         }
 
         // Security: Extract safe file extension from original name

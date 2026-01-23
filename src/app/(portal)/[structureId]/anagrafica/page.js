@@ -8,6 +8,7 @@ export default async function AnagraficaPage({ params }) {
   const { structureId} = await params;
   const rows = await getData(structureId); // lato server
   const data = JSON.parse(rows);
+  console.log(data)
   return (
   <div className="p-4">
 

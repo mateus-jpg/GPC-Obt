@@ -31,8 +31,8 @@ export function NavStructures({
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
       <SidebarGroupLabel>Struttura</SidebarGroupLabel>
       <SidebarMenu>
-        {items.map((item) => (
-          <SidebarMenuItem key={item.name}>
+        {items.map((item, index) => (
+          <SidebarMenuItem key={index}>
 
             <SidebarMenuButton 
               tooltip={item.title}

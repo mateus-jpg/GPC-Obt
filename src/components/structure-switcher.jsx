@@ -7,7 +7,6 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -16,12 +15,20 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import Logo from "./Logo"
+import { useSWRConfig } from "swr"
+import { clearStructureCache } from "@/lib/swr-config"
 
 import { useRouter } from "next/navigation"
 export function StructureSwitcher({ structures, selectedStructure, user }) {
   const { isMobile } = useSidebar()
   const router = useRouter()
+  const { mutate } = useSWRConfig()
+
+  const handleStructureChange = async (structureId) => {
+    // Clear structure-specific cache before navigating
+    await clearStructureCache(mutate)
+    router.push(`/${structureId}`)
+  }
 
   const isAdmin = user?.role === 'admin'
 
@@ -59,7 +66,7 @@ export function StructureSwitcher({ structures, selectedStructure, user }) {
             {structures.map((structure) => (
               <DropdownMenuItem
                 key={structure.id}
-                onClick={() => router.push(`/${structure.id}`)}
+                onClick={() => handleStructureChange(structure.id)}
                 className="gap-2 p-2"
               >
                 {structure.name}

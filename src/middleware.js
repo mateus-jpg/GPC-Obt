@@ -44,13 +44,20 @@ export async function middleware(req) {
   const protocol = req.headers.get('x-forwarded-proto') || 'http';
   const absoluteUrl = `${protocol}://${host}/api/auth/verify`;
 
+  // Create AbortController for timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
   try {
     const verifyRes = await fetch(absoluteUrl, {
       headers: {
         cookie: req.headers.get("cookie") || "",
         'cache-control': 'no-cache',
       },
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (!verifyRes.ok) {
       throw new Error("Session verification fetch failed");

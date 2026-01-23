@@ -25,6 +25,7 @@ export default function AccessDialog({ anagraficaId, structureId, initialCategor
   const [lastPayload, setLastPayload] = useState(null);
   const [categories, setCategories] = useState(initialCategories);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [categoriesFetched, setCategoriesFetched] = useState(!!initialCategories);
 
   const {
     accessState,
@@ -35,21 +36,25 @@ export default function AccessDialog({ anagraficaId, structureId, initialCategor
   } = useAccessForm(categories);
 
   // Fetch categories when dialog opens (if not provided initially)
+  // Uses categoriesFetched flag to prevent infinite loops and duplicate fetches
   useEffect(() => {
-    if (open && !categories && structureId) {
+    if (open && !categoriesFetched && structureId) {
       setCategoriesLoading(true);
       getStructureCategories(structureId)
         .then((cats) => {
           setCategories(cats);
+          setCategoriesFetched(true);
         })
         .catch((err) => {
           console.error("Error fetching categories:", err);
+          // Mark as fetched even on error to prevent infinite retry loops
+          setCategoriesFetched(true);
         })
         .finally(() => {
           setCategoriesLoading(false);
         });
     }
-  }, [open, categories, structureId]);
+  }, [open, categoriesFetched, structureId]);
 
   // Handle adding a new subcategory
   const handleNewSubcategory = useCallback(async (categoryValue, newSubcategory) => {

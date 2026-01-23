@@ -66,6 +66,24 @@ export function invalidateAccessiCache(anagraficaId) {
 }
 
 /**
+ * Helper to invalidate user profile cache
+ * Call this after user permission changes
+ * @param {string} userUid - The user's UID
+ */
+export function invalidateUserProfileCache(userUid) {
+  revalidateTag(CACHE_TAGS.userProfile(userUid));
+}
+
+/**
+ * Helper to invalidate structure-related caches
+ * @param {string} structureId - The structure ID
+ */
+export function invalidateStructureCache(structureId) {
+  revalidateTag(CACHE_TAGS.structure(structureId));
+  revalidateTag(CACHE_TAGS.anagraficaList(structureId));
+}
+
+/**
  * Creates a cached version of a data fetching function
  * Wrapper around unstable_cache with consistent error handling
  * @param {Function} fn - The data fetching function to cache

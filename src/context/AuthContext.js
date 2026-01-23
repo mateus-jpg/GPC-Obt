@@ -3,6 +3,8 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { signInWithEmailAndPassword, signOut as firebaseSignOut, onAuthStateChanged } from "firebase/auth";
 import { clientAuth as auth } from "@/lib/firebase/firebaseClient";
 import { getFirestore, doc, getDoc, query, getDocs, collection, where } from "firebase/firestore";
+import { useSWRConfig } from "swr";
+import { clearSwrCache } from "@/lib/swr-config";
 
 const db = getFirestore();
 
@@ -11,6 +13,9 @@ const AuthContext = createContext(undefined);
 // Cache configuration
 const AUTH_CACHE_KEY = 'gpc_auth_cache';
 const AUTH_CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+// Request deduplication - stores in-flight promises
+let pendingFetchPromise = null;
 
 /**
  * Get cached auth data from localStorage
@@ -76,8 +81,10 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [availableStructures, setAvailableStructures] = useState([]);
   const [currentStructure, setCurrentStructure] = useState(null);
+  const { mutate } = useSWRConfig();
 
   // Fetch /api/auth/me and merge operator document
+  // Uses request deduplication to prevent multiple simultaneous fetches
   const fetchUserWithOperator = useCallback(async (skipCache = false) => {
     // Check cache first (unless explicitly skipped)
     if (!skipCache) {
@@ -89,58 +96,74 @@ export const AuthProvider = ({ children }) => {
       }
     }
 
-    try {
-      const res = await fetch("/api/auth/me");
-      if (!res.ok) return null;
-
-      const data = await res.json();
-      if (!data.user) return null;
-
-      let fullUser = { ...data.user };
-      let structures = [];
-
-      // Fetch operator document if operatorId exists
-      const operatorId = data.user.uid;
-      if (operatorId) {
-        const operatorDoc = await getDoc(doc(db, "operators", operatorId));
-        if (operatorDoc.exists()) {
-          fullUser = { ...fullUser, ...operatorDoc.data() };
-
-          // Admin users can see all structures, non-admin users only see their assigned structures
-          if (fullUser.role === 'admin') {
-            const structuresData = await getDocs(collection(db, "structures"));
-            structures = structuresData.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            console.log("Admin user - fetched all structures:", structures);
-            setAvailableStructures(structures);
-          } else {
-            const structureIds = fullUser.structureIds || [];
-            if (structureIds.length > 0) {
-              const structuresData = await getDocs(
-                query(collection(db, "structures"), where("__name__", "in", structureIds))
-              );
-              structures = structuresData.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-              console.log("Fetched structures data with IDs:", structures);
-              setAvailableStructures(structures);
-            }
-          }
-        } else {
-          console.warn("Operator document not found for", operatorId);
-        }
-      }
-
-      console.log("Fetched full user:", fullUser);
-
-      // Cache the fetched data
-      setCachedAuthData({
-        user: fullUser,
-        structures,
-      });
-
-      return fullUser;
-    } catch (err) {
-      console.error("Failed to fetch user or operator", err);
-      return null;
+    // Request deduplication: if there's already a fetch in progress, return that promise
+    if (pendingFetchPromise) {
+      console.log("Reusing pending fetch request");
+      return pendingFetchPromise;
     }
+
+    // Create the actual fetch operation
+    const fetchOperation = async () => {
+      try {
+        const res = await fetch("/api/auth/me");
+        if (!res.ok) return null;
+
+        const data = await res.json();
+        if (!data.user) return null;
+
+        let fullUser = { ...data.user };
+        let structures = [];
+
+        // Fetch operator document if operatorId exists
+        const operatorId = data.user.uid;
+        if (operatorId) {
+          const operatorDoc = await getDoc(doc(db, "operators", operatorId));
+          if (operatorDoc.exists()) {
+            fullUser = { ...fullUser, ...operatorDoc.data() };
+
+            // Admin users can see all structures, non-admin users only see their assigned structures
+            if (fullUser.role === 'admin') {
+              const structuresData = await getDocs(collection(db, "structures"));
+              structures = structuresData.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+              console.log("Admin user - fetched all structures:", structures);
+              setAvailableStructures(structures);
+            } else {
+              const structureIds = fullUser.structureIds || [];
+              if (structureIds.length > 0) {
+                const structuresData = await getDocs(
+                  query(collection(db, "structures"), where("__name__", "in", structureIds))
+                );
+                structures = structuresData.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                console.log("Fetched structures data with IDs:", structures);
+                setAvailableStructures(structures);
+              }
+            }
+          } else {
+            console.warn("Operator document not found for", operatorId);
+          }
+        }
+
+        console.log("Fetched full user:", fullUser);
+
+        // Cache the fetched data
+        setCachedAuthData({
+          user: fullUser,
+          structures,
+        });
+
+        return fullUser;
+      } catch (err) {
+        console.error("Failed to fetch user or operator", err);
+        return null;
+      } finally {
+        // Clear the pending promise when done
+        pendingFetchPromise = null;
+      }
+    };
+
+    // Store the promise for deduplication
+    pendingFetchPromise = fetchOperation();
+    return pendingFetchPromise;
   }, []);
 
   useEffect(() => {
@@ -172,28 +195,30 @@ export const AuthProvider = ({ children }) => {
       });
       if (!res.ok) throw new Error("Failed to create session cookie");
 
-      // Clear cache and fetch fresh data on login
+      // Clear all caches and fetch fresh data on login
       clearCachedAuthData();
+      await clearSwrCache(mutate); // Clear SWR cache to prevent showing old user data
       const fullUser = await fetchUserWithOperator(true); // Skip cache
       setUser(fullUser);
     } finally {
       setLoading(false);
     }
-  }, [fetchUserWithOperator]);
+  }, [fetchUserWithOperator, mutate]);
 
   const signOut = useCallback(async () => {
     setLoading(true);
     try {
       await fetch("/api/sessionLogout", { method: "POST" });
       await firebaseSignOut(auth);
-      // Clear cached auth data on logout
+      // Clear all caches on logout
       clearCachedAuthData();
+      await clearSwrCache(mutate); // Clear SWR cache to prevent showing old user data
       setUser(null);
       setAvailableStructures([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [mutate]);
 
   // Function to force refresh auth data (useful after profile updates)
   const refreshAuthData = useCallback(async () => {

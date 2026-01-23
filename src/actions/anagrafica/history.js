@@ -16,6 +16,7 @@ const adminDb = admin.firestore();
  * @param {string} params.userUid - User who made the change
  * @param {string} params.userMail - Email of user who made the change
  * @param {string} params.structureId - Structure from which change was made
+ * @returns {Promise<{success: boolean, historyId?: string, error?: string}>} Result of history creation
  */
 export async function createHistoryEntry({
   anagraficaId,
@@ -42,22 +43,31 @@ export async function createHistoryEntry({
       changes
     };
 
-    await historyRef.add(historyEntry);
+    const docRef = await historyRef.add(historyEntry);
 
     logger.info('History entry created', {
       anagraficaId,
       changeType,
       changedGroups,
-      userUid
+      userUid,
+      historyId: docRef.id
     });
 
+    return { success: true, historyId: docRef.id };
+
   } catch (error) {
-    // Don't let history creation failures break the main operation
+    // Log the error but don't break the main operation
+    // Return failure status so callers can handle if needed
     logger.error('Failed to create history entry', error, {
       anagraficaId,
       changeType,
       changedGroups
     });
+
+    return {
+      success: false,
+      error: `History creation failed: ${error.message}`
+    };
   }
 }
 

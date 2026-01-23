@@ -77,6 +77,7 @@ export async function getAnagraficaInternal(anagraficaId, userUid) {
 /**
  * Internal function to update anagrafica
  * Can be called from both server actions and API routes
+ * Uses Firestore transaction to prevent race conditions
  * @param {string} anagraficaId - The anagrafica document ID
  * @param {Object} body - The update data (should be pre-validated)
  * @param {string} userUid - The user UID
@@ -86,65 +87,73 @@ export async function getAnagraficaInternal(anagraficaId, userUid) {
  */
 export async function updateAnagraficaInternal(anagraficaId, body, userUid, userMail = null, structureId = null) {
   const anagraficaRef = adminDb.collection('anagrafica').doc(anagraficaId);
-  const anagraficaSnap = await anagraficaRef.get();
 
-  if (!anagraficaSnap.exists) {
-    const error = new Error('Anagrafica not found');
-    error.code = 'NOT_FOUND';
-    throw error;
-  }
+  // Use transaction to ensure atomic read-check-write
+  const result = await adminDb.runTransaction(async (transaction) => {
+    const anagraficaSnap = await transaction.get(anagraficaRef);
 
-  const anagraficaData = anagraficaSnap.data();
+    if (!anagraficaSnap.exists) {
+      const error = new Error('Anagrafica not found');
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
 
-  // Check soft delete
-  if (anagraficaData.deletedAt) {
-    const error = new Error('Anagrafica not found');
-    error.code = 'NOT_FOUND';
-    throw error;
-  }
+    const anagraficaData = anagraficaSnap.data();
 
-  const allowedStructures = anagraficaData.canBeAccessedBy || [];
+    // Check soft delete
+    if (anagraficaData.deletedAt) {
+      const error = new Error('Anagrafica not found');
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
 
-  // Check access
-  await verifyUserPermissions({
-    userUid,
-    allowedStructures
+    const allowedStructures = anagraficaData.canBeAccessedBy || [];
+
+    // Check access (this is async but happens within transaction context)
+    await verifyUserPermissions({
+      userUid,
+      allowedStructures
+    });
+
+    // Compute which groups have changed for history tracking
+    const { changedGroups, changes } = computeGroupChanges(anagraficaData, body);
+
+    const updateData = {
+      ...body,
+      updatedAt: new Date(),
+      updatedBy: userUid,
+    };
+
+    if (userMail) {
+      updateData.updatedByMail = userMail;
+    }
+    if (structureId) {
+      updateData.updatedByStructure = structureId;
+    }
+
+    // Update within transaction
+    transaction.update(anagraficaRef, updateData);
+
+    return { allowedStructures, changedGroups, changes, updateData };
   });
 
-  // Compute which groups have changed for history tracking
-  const { changedGroups, changes } = computeGroupChanges(anagraficaData, body);
-
-  // Create history entry BEFORE applying the update (if there are changes)
-  if (changedGroups.length > 0) {
+  // Create history entry AFTER successful transaction (outside transaction to avoid conflicts)
+  if (result.changedGroups.length > 0) {
     await createHistoryEntry({
       anagraficaId,
       changeType: 'update',
-      changedGroups,
-      changes,
+      changedGroups: result.changedGroups,
+      changes: result.changes,
       userUid,
       userMail,
       structureId
     });
   }
 
-  const updateData = {
-    ...body,
-    updatedAt: new Date(),
-    updatedBy: userUid,
-  };
-
-  if (userMail) {
-    updateData.updatedByMail = userMail;
-  }
-  if (structureId) {
-    updateData.updatedByStructure = structureId;
-  }
-
-  await anagraficaRef.update(updateData);
-
   // Invalidate caches after successful update
-  invalidateAnagraficaCaches(anagraficaId, allowedStructures);
+  invalidateAnagraficaCaches(anagraficaId, result.allowedStructures);
 
+  // Fetch updated data
   const updatedSnap = await anagraficaRef.get();
   return { id: updatedSnap.id, ...updatedSnap.data() };
 }
@@ -152,41 +161,49 @@ export async function updateAnagraficaInternal(anagraficaId, body, userUid, user
 /**
  * Internal function to soft delete anagrafica
  * Can be called from both server actions and API routes
+ * Uses Firestore transaction to prevent race conditions
  * @param {string} anagraficaId - The anagrafica document ID
  * @param {string} userUid - The user UID
  * @returns {Object} Success result
  */
 export async function deleteAnagraficaInternal(anagraficaId, userUid) {
   const anagraficaRef = adminDb.collection('anagrafica').doc(anagraficaId);
-  const anagraficaSnap = await anagraficaRef.get();
 
-  if (!anagraficaSnap.exists) {
-    const error = new Error('Anagrafica not found');
-    error.code = 'NOT_FOUND';
-    throw error;
-  }
+  // Use transaction to ensure atomic read-check-write
+  const allowedStructures = await adminDb.runTransaction(async (transaction) => {
+    const anagraficaSnap = await transaction.get(anagraficaRef);
 
-  const anagraficaData = anagraficaSnap.data();
+    if (!anagraficaSnap.exists) {
+      const error = new Error('Anagrafica not found');
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
 
-  // Already deleted
-  if (anagraficaData.deletedAt) {
-    const error = new Error('Anagrafica already deleted');
-    error.code = 'ALREADY_DELETED';
-    throw error;
-  }
+    const anagraficaData = anagraficaSnap.data();
 
-  const allowedStructures = anagraficaData.canBeAccessedBy || [];
+    // Already deleted
+    if (anagraficaData.deletedAt) {
+      const error = new Error('Anagrafica already deleted');
+      error.code = 'ALREADY_DELETED';
+      throw error;
+    }
 
-  // Check access
-  await verifyUserPermissions({
-    userUid,
-    allowedStructures
-  });
+    const structures = anagraficaData.canBeAccessedBy || [];
 
-  await anagraficaRef.update({
-    deletedAt: new Date(),
-    deletedBy: userUid,
-    deleted: true,
+    // Check access
+    await verifyUserPermissions({
+      userUid,
+      allowedStructures: structures
+    });
+
+    // Soft delete within transaction
+    transaction.update(anagraficaRef, {
+      deletedAt: new Date(),
+      deletedBy: userUid,
+      deleted: true,
+    });
+
+    return structures;
   });
 
   // Invalidate caches after successful delete
@@ -220,6 +237,7 @@ export async function createAnagrafica(body, services = []) {
         registeredBy: userUid,
         createdAt: new Date(),
         updatedAt: new Date(),
+        deleted: false,
       };
 
       const docRef = await adminDb.collection('anagrafica').add(docData);
