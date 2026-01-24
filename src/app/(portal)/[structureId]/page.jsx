@@ -1,29 +1,67 @@
-import { ChartAreaInteractive } from "@/components/chart-area-interactive"
-import { DataTable } from "@/components/data-table"
+"use client"
+
+import { use } from "react"
+import { useStatistics } from "@/hooks/use-statistics"
 import { SectionCards } from "@/components/section-cards"
+import { BirthPlaceMap, DemographicsCharts, AdditionalStatsCards, ServicesCharts } from "@/components/statistics"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { IconChartBar, IconUsers, IconClipboardList, IconWorld } from "@tabler/icons-react"
 
+export default function Page({ params }) {
+  const { structureId } = use(params)
+  const { stats, isLoading } = useStatistics(structureId)
 
-import data from "./data.json"
-
-export default function Page() {
   return (
-    <>
-      <SectionCards
-        title="Panoramica Community"
-        description="Statistiche e dati principali delle persone e delle attività."
-      />
-      <div className="px-4 lg:px-6">
-        <ChartAreaInteractive
-          title="Andamento Lavoro e Sanitario"
-          description="Visualizza i trend su occupazione, Sanitario e pratiche burocratiche."
-        />
-      </div>
-      <DataTable
-        title="Elenco Persone Registrate"
-        description="Anagrafica dei membri della comunità con i dettagli principali."
-        data={data}
-      />
-    </>
+    <div className="@container/main flex flex-col gap-6">
+      {/* Header Stats Cards */}
+      <SectionCards stats={stats} isLoading={isLoading} />
 
-  );
+      {/* Tabbed Content for Different Views */}
+      <Tabs defaultValue="overview" className="px-4 lg:px-6">
+        <TabsList className="mb-4">
+          <TabsTrigger value="overview" className="gap-2">
+            <IconChartBar className="size-4" />
+            <span className="hidden sm:inline">Panoramica</span>
+          </TabsTrigger>
+          <TabsTrigger value="demographics" className="gap-2">
+            <IconUsers className="size-4" />
+            <span className="hidden sm:inline">Demografia</span>
+          </TabsTrigger>
+          <TabsTrigger value="services" className="gap-2">
+            <IconClipboardList className="size-4" />
+            <span className="hidden sm:inline">Servizi</span>
+          </TabsTrigger>
+          <TabsTrigger value="geography" className="gap-2">
+            <IconWorld className="size-4" />
+            <span className="hidden sm:inline">Geografia</span>
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Overview Tab */}
+        <TabsContent value="overview" className="space-y-6 mt-0">
+          {/* Birth Place Map */}
+          <BirthPlaceMap stats={stats} isLoading={isLoading} />
+
+          {/* Quick Demographics Overview */}
+          <DemographicsCharts stats={stats} isLoading={isLoading} />
+        </TabsContent>
+
+        {/* Demographics Tab */}
+        <TabsContent value="demographics" className="space-y-6 mt-0">
+          <DemographicsCharts stats={stats} isLoading={isLoading} />
+          <AdditionalStatsCards stats={stats} isLoading={isLoading} />
+        </TabsContent>
+
+        {/* Services Tab */}
+        <TabsContent value="services" className="space-y-6 mt-0">
+          <ServicesCharts stats={stats} isLoading={isLoading} />
+        </TabsContent>
+
+        {/* Geography Tab */}
+        <TabsContent value="geography" className="space-y-6 mt-0">
+          <BirthPlaceMap stats={stats} isLoading={isLoading} />
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
 }

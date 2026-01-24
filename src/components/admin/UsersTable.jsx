@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { listAllUsers } from "@/actions/admin/users"
-import { UserClaimsDialog } from "./UserClaimsDialog"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Eye } from "lucide-react"
 import { toast } from "sonner"
@@ -22,8 +21,6 @@ export function UsersTable() {
     const [users, setUsers] = useState([])
     const [loading, setLoading] = useState(true)
     const [pageToken, setPageToken] = useState(undefined)
-    const [selectedUser, setSelectedUser] = useState(null)
-    const [isDialogOpen, setIsDialogOpen] = useState(false)
 
     const fetchUsers = useCallback(async (token) => {
         setLoading(true)
@@ -42,16 +39,6 @@ export function UsersTable() {
         fetchUsers()
     }, [fetchUsers])
 
-    const handleEdit = (user) => {
-        setSelectedUser(user)
-        setIsDialogOpen(true)
-    }
-
-    const handleUserUpdated = () => {
-        // Refresh the list
-        fetchUsers()
-    }
-
     return (
         <div className="space-y-4">
             <div className="rounded-md border">
@@ -61,7 +48,7 @@ export function UsersTable() {
                             <TableHead>Email</TableHead>
                             <TableHead>UID</TableHead>
                             <TableHead>Role</TableHead>
-                            <TableHead>Structure ID</TableHead>
+                            <TableHead>Structures</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -71,18 +58,15 @@ export function UsersTable() {
                                 <TableCell className="font-medium">{user.email}</TableCell>
                                 <TableCell className="text-muted-foreground text-xs">{user.uid}</TableCell>
                                 <TableCell>
-                                    <Badge variant={user.customClaims?.role === 'admin' ? 'destructive' : user.customClaims?.role === 'structure_admin' ? 'default' : 'outline'}>
-                                        {user.customClaims?.role || "user"}
+                                    <Badge variant={user.role === 'admin' ? 'destructive' : user.role === 'structure_admin' ? 'default' : 'outline'}>
+                                        {user.role || "user"}
                                     </Badge>
                                 </TableCell>
-                                <TableCell>{user.customClaims?.structureIds || "-"}</TableCell>
+                                <TableCell>{user.structureIds?.length > 0 ? user.structureIds.join(', ') : "-"}</TableCell>
                                 <TableCell className="text-right space-x-2">
                                     <Button variant="ghost" size="sm" onClick={() => router.push(`/admin/users/${user.uid}`)}>
                                         <Eye className="h-4 w-4 mr-1" />
                                         View
-                                    </Button>
-                                    <Button variant="ghost" size="sm" onClick={() => handleEdit(user)}>
-                                        Edit Claims
                                     </Button>
                                 </TableCell>
                             </TableRow>
@@ -103,15 +87,6 @@ export function UsersTable() {
                         Load More
                     </Button>
                 </div>
-            )}
-
-            {selectedUser && (
-                <UserClaimsDialog
-                    user={selectedUser}
-                    open={isDialogOpen}
-                    onOpenChange={setIsDialogOpen}
-                    onUserUpdated={handleUserUpdated}
-                />
             )}
         </div>
     )

@@ -26,6 +26,75 @@ export const ALLOWED_MIME_TYPES = [
 ];
 
 /**
+ * Magic numbers (file signatures) for validating file content
+ * Maps MIME types to their expected file signatures
+ */
+export const FILE_SIGNATURES = {
+    'image/jpeg': [
+        [0xFF, 0xD8, 0xFF, 0xE0],
+        [0xFF, 0xD8, 0xFF, 0xE1],
+        [0xFF, 0xD8, 0xFF, 0xE2],
+        [0xFF, 0xD8, 0xFF, 0xE3],
+        [0xFF, 0xD8, 0xFF, 0xE8],
+    ],
+    'image/jpg': [
+        [0xFF, 0xD8, 0xFF, 0xE0],
+        [0xFF, 0xD8, 0xFF, 0xE1],
+        [0xFF, 0xD8, 0xFF, 0xE2],
+        [0xFF, 0xD8, 0xFF, 0xE3],
+        [0xFF, 0xD8, 0xFF, 0xE8],
+    ],
+    'image/png': [[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]],
+    'image/gif': [
+        [0x47, 0x49, 0x46, 0x38, 0x37, 0x61], // GIF87a
+        [0x47, 0x49, 0x46, 0x38, 0x39, 0x61], // GIF89a
+    ],
+    'image/webp': [[0x52, 0x49, 0x46, 0x46]], // RIFF (followed by WEBP at offset 8)
+    'application/pdf': [[0x25, 0x50, 0x44, 0x46]], // %PDF
+    // MS Office documents (ZIP-based OOXML)
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': [[0x50, 0x4B, 0x03, 0x04]],
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': [[0x50, 0x4B, 0x03, 0x04]],
+    // Legacy MS Office (OLE compound document)
+    'application/msword': [[0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]],
+    'application/vnd.ms-excel': [[0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]],
+};
+
+/**
+ * Validates file content by checking magic numbers (file signatures)
+ * This prevents MIME type spoofing attacks
+ *
+ * @param {Buffer} buffer - File content as buffer
+ * @param {string} claimedMimeType - The MIME type claimed by the client
+ * @returns {boolean} True if file signature matches claimed MIME type
+ */
+export function validateFileSignature(buffer, claimedMimeType) {
+    const signatures = FILE_SIGNATURES[claimedMimeType];
+
+    // For text files, we can't validate by signature - allow them but with size limits
+    if (claimedMimeType === 'text/plain' || claimedMimeType === 'text/csv') {
+        // Basic check: ensure it's valid UTF-8 text (no null bytes in first KB)
+        const sampleSize = Math.min(buffer.length, 1024);
+        for (let i = 0; i < sampleSize; i++) {
+            if (buffer[i] === 0x00) {
+                return false; // Binary file disguised as text
+            }
+        }
+        return true;
+    }
+
+    // If we don't have signatures for this type, reject to be safe
+    if (!signatures) {
+        return false;
+    }
+
+    // Check if buffer starts with any of the valid signatures
+    return signatures.some(signature => {
+        if (buffer.length < signature.length) return false;
+        return signature.every((byte, index) => buffer[index] === byte);
+    });
+}
+
+/**
  * Validates a single file
  * 
  * @param {File} file - File to validate

@@ -1,0 +1,102 @@
+/**
+ * Cache configuration and utilities for GPC application
+ * Uses Next.js unstable_cache for server-side data caching
+ */
+
+import { unstable_cache } from 'next/cache';
+import { revalidateTag } from 'next/cache';
+import { CACHE as CACHE_CONFIG } from '@/config/constants';
+
+/**
+ * Cache tag generators for consistent cache key naming
+ * Tags are used for targeted cache invalidation
+ */
+export const CACHE_TAGS = {
+  // Anagrafica
+  anagrafica: (id) => `anagrafica-${id}`,
+  anagraficaList: (structureId) => `anagrafica-list-${structureId}`,
+
+  // Structures
+  structure: (id) => `structure-${id}`,
+
+  // User/Operator profiles
+  userProfile: (uid) => `user-${uid}`,
+
+  // Access records (services)
+  accessi: (anagraficaId) => `accessi-${anagraficaId}`,
+};
+
+/**
+ * Revalidation times in seconds
+ * @see config/constants.js for centralized configuration
+ */
+export const REVALIDATE = {
+  userProfile: CACHE_CONFIG.REVALIDATE.USER_PROFILE,
+  structure: CACHE_CONFIG.REVALIDATE.STRUCTURE,
+  anagraficaList: CACHE_CONFIG.REVALIDATE.ANAGRAFICA_LIST,
+  anagraficaDetail: CACHE_CONFIG.REVALIDATE.ANAGRAFICA_DETAIL,
+  accessi: CACHE_CONFIG.REVALIDATE.ACCESSI,
+};
+
+/**
+ * Helper to invalidate all cache tags related to an anagrafica record
+ * Call this after any mutation to ensure data consistency
+ * @param {string} anagraficaId - The anagrafica document ID
+ * @param {string[]} structureIds - Array of structure IDs that can access this record
+ */
+export function invalidateAnagraficaCaches(anagraficaId, structureIds = []) {
+  // Invalidate the specific anagrafica detail cache
+  revalidateTag(CACHE_TAGS.anagrafica(anagraficaId));
+
+  // Invalidate accessi cache for this anagrafica
+  revalidateTag(CACHE_TAGS.accessi(anagraficaId));
+
+  // Invalidate all affected structure list caches
+  for (const structureId of structureIds) {
+    revalidateTag(CACHE_TAGS.anagraficaList(structureId));
+  }
+}
+
+/**
+ * Helper to invalidate access-related caches
+ * @param {string} anagraficaId - The anagrafica document ID
+ */
+export function invalidateAccessiCache(anagraficaId) {
+  revalidateTag(CACHE_TAGS.accessi(anagraficaId));
+}
+
+/**
+ * Helper to invalidate user profile cache
+ * Call this after user permission changes
+ * @param {string} userUid - The user's UID
+ */
+export function invalidateUserProfileCache(userUid) {
+  revalidateTag(CACHE_TAGS.userProfile(userUid));
+}
+
+/**
+ * Helper to invalidate structure-related caches
+ * @param {string} structureId - The structure ID
+ */
+export function invalidateStructureCache(structureId) {
+  revalidateTag(CACHE_TAGS.structure(structureId));
+  revalidateTag(CACHE_TAGS.anagraficaList(structureId));
+}
+
+/**
+ * Creates a cached version of a data fetching function
+ * Wrapper around unstable_cache with consistent error handling
+ * @param {Function} fn - The data fetching function to cache
+ * @param {string[]} keyParts - Cache key parts for unique identification
+ * @param {Object} options - Cache options (tags, revalidate)
+ */
+export function createCachedFetcher(fn, keyParts, options = {}) {
+  return unstable_cache(
+    fn,
+    keyParts,
+    {
+      revalidate: options.revalidate || 60,
+      tags: options.tags || [],
+    }
+  );
+}

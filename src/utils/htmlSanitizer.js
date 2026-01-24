@@ -10,7 +10,12 @@ export function sanitizeRichText(dirtyHtml) {
     ],
     allowedAttributes: {
       a: ["href", "title", "target", "rel"],
-      span: ["style"],
+      // Note: style attributes removed to prevent CSS injection attacks
+      span: ["class"],
+    },
+    // Only allow safe CSS classes, no inline styles
+    allowedClasses: {
+      span: ["highlight", "bold", "italic", "underline"],
     },
     allowedSchemes: ["http", "https", "mailto"],
     allowedSchemesByTag: {},

@@ -40,10 +40,8 @@ export {
   createUserSchema,
   updateUserSchema,
   userStructureSchema,
-  userClaimsSchema,
   profileUpdateSchema,
   validateCreateUser,
   validateUpdateUser,
   validateProfileUpdate,
-  validateUserClaims,
 } from './user';

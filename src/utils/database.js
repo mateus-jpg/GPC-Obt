@@ -4,8 +4,12 @@
  */
 
 import admin from '@/lib/firebase/firebaseAdmin';
+import { serializeFirestoreData } from '@/lib/utils';
 
 const db = admin.firestore();
+
+// Re-export for backward compatibility
+export { serializeFirestoreData, serializeFirestoreData as serializeFirestoreDoc };
 
 /**
  * Gets a user document, checking operators collection first, then users collection as fallback
@@ -61,38 +65,6 @@ export function arraysIntersect(a = [], b = []) {
     return (b || []).some(x => set.has(x));
 }
 
-/**
- * Safely serializes Firestore document data
- * Converts Timestamps and other Firestore types to plain JavaScript
- * 
- * @param {Object} data - Data to serialize
- * @returns {Object} Serialized data safe for JSON stringification
- */
-export function serializeFirestoreDoc(data) {
-    if (!data) return null;
-
-    const serialized = {};
-
-    for (const [key, value] of Object.entries(data)) {
-        if (value === null || value === undefined) {
-            serialized[key] = value;
-        } else if (value instanceof admin.firestore.Timestamp) {
-            serialized[key] = value.toDate().toISOString();
-        } else if (Array.isArray(value)) {
-            serialized[key] = value.map(item =>
-                item instanceof admin.firestore.Timestamp
-                    ? item.toDate().toISOString()
-                    : item
-            );
-        } else if (typeof value === 'object' && value.constructor === Object) {
-            serialized[key] = serializeFirestoreDoc(value);
-        } else {
-            serialized[key] = value;
-        }
-    }
-
-    return serialized;
-}
 
 /**
  * Gets a Firestore collection reference

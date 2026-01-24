@@ -1,4 +1,6 @@
-import { IconTrendingDown, IconTrendingUp } from "@tabler/icons-react"
+"use client"
+
+import { IconTrendingDown, IconTrendingUp, IconUsers, IconCalendarEvent, IconFileText, IconBriefcase } from "@tabler/icons-react"
 
 import { Badge } from "@/components/ui/badge"
 import {
@@ -9,96 +11,148 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 
-export function SectionCards() {
+export function SectionCards({ stats, isLoading }) {
+  if (isLoading) {
+    return (
+      <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
+        {[...Array(4)].map((_, i) => (
+          <Card key={i} className="@container/card">
+            <CardHeader>
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-8 w-16 mt-2" />
+            </CardHeader>
+            <CardFooter className="flex-col items-start gap-1.5">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-3 w-3/4" />
+            </CardFooter>
+          </Card>
+        ))}
+      </div>
+    )
+  }
+
+  const totalPersons = stats?.totalPersons || 0
+  const activeReminders = stats?.activeReminders || 0
+  const totalFiles = stats?.totalFiles || 0
+  const totalAccesses = stats?.totalAccesses || 0
+
+  // Calculate job status summary
+  const jobStats = stats?.byJobStatus || {}
+  const employed = jobStats["Occupato"] || jobStats["occupato"] || 0
+  const inTraining = jobStats["In formazione"] || jobStats["in formazione"] || 0
+  const totalJobTracked = Object.values(jobStats).reduce((a, b) => a + b, 0)
+  const employmentRate = totalJobTracked > 0 ? Math.round(((employed + inTraining) / totalJobTracked) * 100) : 0
+
   return (
     <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Persone Registrate</CardDescription>
+          <CardDescription className="flex items-center gap-2">
+            <IconUsers className="size-4" />
+            Persone Registrate
+          </CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            120
+            {totalPersons.toLocaleString('it-IT')}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
-              <IconTrendingUp />
-              +10%
+            <Badge variant="outline" className="text-emerald-600 dark:text-emerald-400">
+              <IconTrendingUp className="size-3" />
+              Attivo
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Nuove registrazioni questo mese <IconTrendingUp className="size-4" />
+            Database anagrafica community
           </div>
           <div className="text-muted-foreground">
-            Andamento positivo delle iscrizioni
+            {Object.keys(stats?.byBirthPlace || {}).length} paesi di provenienza
           </div>
         </CardFooter>
       </Card>
 
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Eventi in Scadenza</CardDescription>
+          <CardDescription className="flex items-center gap-2">
+            <IconCalendarEvent className="size-4" />
+            Promemoria Attivi
+          </CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            8
+            {activeReminders.toLocaleString('it-IT')}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
-              <IconTrendingDown />
-              -5%
-            </Badge>
+            {activeReminders > 5 ? (
+              <Badge variant="outline" className="text-amber-600 dark:text-amber-400">
+                <IconTrendingUp className="size-3" />
+                Attenzione
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-emerald-600 dark:text-emerald-400">
+                <IconTrendingDown className="size-3" />
+                Sotto controllo
+              </Badge>
+            )}
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Attenzione alle scadenze <IconTrendingDown className="size-4" />
+            Scadenze e appuntamenti
           </div>
           <div className="text-muted-foreground">
-            Alcuni eventi richiedono azione rapida
+            {stats?.completedReminders || 0} completati
           </div>
         </CardFooter>
       </Card>
 
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Documenti Caricati</CardDescription>
+          <CardDescription className="flex items-center gap-2">
+            <IconFileText className="size-4" />
+            Documenti Caricati
+          </CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            256
+            {totalFiles.toLocaleString('it-IT')}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
-              <IconTrendingUp />
-              +18%
+            <Badge variant="outline" className="text-blue-600 dark:text-blue-400">
+              <IconTrendingUp className="size-3" />
+              Gestiti
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Caricamenti in aumento <IconTrendingUp className="size-4" />
+            Archivio documentale
           </div>
-          <div className="text-muted-foreground">Gestione documentale attiva</div>
+          <div className="text-muted-foreground">
+            {stats?.filesWithExpiration || 0} con scadenza
+          </div>
         </CardFooter>
       </Card>
 
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Pratiche Burocratiche</CardDescription>
+          <CardDescription className="flex items-center gap-2">
+            <IconBriefcase className="size-4" />
+            Totale Accessi
+          </CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            34
+            {totalAccesses.toLocaleString('it-IT')}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
-              <IconTrendingUp />
-              +2%
+            <Badge variant="outline" className="text-violet-600 dark:text-violet-400">
+              {employmentRate}% attivi
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Pratiche gestite regolarmente <IconTrendingUp className="size-4" />
+            Servizi erogati
           </div>
           <div className="text-muted-foreground">
-            Processo amministrativo sotto controllo
+            {Object.keys(stats?.byAccessType || {}).length} tipologie di servizio
           </div>
         </CardFooter>
       </Card>

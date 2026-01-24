@@ -16,20 +16,17 @@ vi.mock('@/lib/firebase/firebaseAdmin', () => {
       displayName: 'Test User',
       photoURL: null,
       disabled: false,
-      customClaims: { role: 'admin' },
       metadata: {
         creationTime: '2024-01-01T00:00:00Z',
         lastSignInTime: '2024-01-15T00:00:00Z',
       },
     })),
     updateUser: vi.fn(() => Promise.resolve(mockUserRecord)),
-    setCustomUserClaims: vi.fn(() => Promise.resolve()),
     listUsers: vi.fn(() => Promise.resolve({
       users: [{
         uid: 'user-1',
         email: 'user1@example.com',
         displayName: 'User One',
-        customClaims: { role: 'user' },
         metadata: {
           creationTime: '2024-01-01T00:00:00Z',
           lastSignInTime: '2024-01-15T00:00:00Z',
@@ -143,7 +140,7 @@ vi.mock('@/lib/utils', () => ({
 }))
 
 // Import after mocks
-import { listAllUsers, setUserClaims } from '@/actions/admin/users'
+import { listAllUsers } from '@/actions/admin/users'
 import { auth } from '@/lib/firebase/firebaseAdmin'
 import { requireUser, verifySuperAdmin } from '@/utils/server-auth'
 
@@ -185,34 +182,6 @@ describe('Admin User Actions', () => {
       vi.mocked(verifySuperAdmin).mockRejectedValueOnce(new Error('Forbidden'))
 
       await expect(listAllUsers()).rejects.toThrow()
-    })
-  })
-
-  describe('setUserClaims', () => {
-    it('should set custom claims for a user', async () => {
-      const targetUid = 'target-user-uid'
-      const claims = { role: 'structure_admin', structureIds: ['structure-1'] }
-
-      const result = await setUserClaims(targetUid, claims)
-
-      expect(result.success).toBe(true)
-      expect(auth.setCustomUserClaims).toHaveBeenCalledWith(targetUid, claims)
-    })
-
-    it('should require super admin privileges', async () => {
-      await setUserClaims('target-uid', { role: 'user' })
-
-      expect(requireUser).toHaveBeenCalled()
-      expect(verifySuperAdmin).toHaveBeenCalled()
-    })
-
-    it('should return error when Firebase fails', async () => {
-      vi.mocked(auth.setCustomUserClaims).mockRejectedValueOnce(new Error('Firebase error'))
-
-      const result = await setUserClaims('target-uid', { role: 'user' })
-
-      expect(result.success).toBe(false)
-      expect(result.error).toBe('Firebase error')
     })
   })
 })

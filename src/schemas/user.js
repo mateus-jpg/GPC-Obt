@@ -40,15 +40,6 @@ export const userStructureSchema = z.object({
 });
 
 /**
- * Schema for setting user claims
- */
-export const userClaimsSchema = z.object({
-  role: roleSchema.optional(),
-  structureId: z.string().max(100).optional().nullable(),
-  structureIds: z.array(z.string().max(100)).max(50).optional(),
-});
-
-/**
  * Schema for profile update (self-service)
  */
 export const profileUpdateSchema = z.object({
@@ -110,22 +101,6 @@ export function validateProfileUpdate(data) {
         field: err.path.join('.'),
         message: err.message,
       })),
-      error: result.error.errors.map(e => e.message).join(', '),
-    };
-  }
-
-  return { success: true, data: result.data };
-}
-
-/**
- * Validate user claims request
- */
-export function validateUserClaims(data) {
-  const result = userClaimsSchema.safeParse(data);
-
-  if (!result.success) {
-    return {
-      success: false,
       error: result.error.errors.map(e => e.message).join(', '),
     };
   }

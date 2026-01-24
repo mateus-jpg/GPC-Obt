@@ -49,9 +49,14 @@ export default async function StructureAdminPage({ params }) {
                     <h1 className="text-3xl font-bold tracking-tight">Structure Administration</h1>
                     <p className="text-muted-foreground">Manage settings and information for this structure.</p>
                 </div>
-                <Button asChild variant="outline">
-                    <Link href={`/${structureId}/admin/users`}>Manage Users & Admins</Link>
-                </Button>
+                <div className="flex gap-2">
+                    <Button asChild variant="outline">
+                        <Link href={`/${structureId}/admin/categories`}>Gestione Categorie</Link>
+                    </Button>
+                    <Button asChild variant="outline">
+                        <Link href={`/${structureId}/admin/users`}>Gestione Operatori</Link>
+                    </Button>
+                </div>
             </div>
             <StructureForm structure={structure} />
 

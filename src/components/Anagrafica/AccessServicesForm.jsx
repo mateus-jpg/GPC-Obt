@@ -1,15 +1,15 @@
 "use client";
 
-import React from "react";
+import React, { useState, useCallback } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Combobox, CreateMultiCombobox } from "@/components/form/Combobox";
+import { Combobox, MultiCombobox } from "@/components/form/Combobox";
 import { TiptapEditor } from "@/components/tiptap-editor";
 import { Dropzone } from "@/components/ui/shadcn-io/dropzone";
 import DatePicker from "@/components/form/DatePicker";
-import { AccessTypes, AccessClassifications } from "@/components/Anagrafica/AccessDialog/AccessTypes";
+import { AccessTypes as DefaultAccessTypes, AccessClassifications } from "@/components/Anagrafica/AccessDialog/AccessTypes";
 import clsx from "clsx";
 
 export default function AccessServicesForm({
@@ -17,7 +17,38 @@ export default function AccessServicesForm({
     onChange, // (type, field, value) => void
     showClassification = false,
     showReferralEntity = false,
+    categories = null, // Custom categories from structure (optional, defaults to AccessTypes)
+    onNewSubcategory = null, // Callback when user adds new subcategory via Altro: (categoryValue, newSubcategory) => void
 }) {
+    // Use provided categories or fall back to defaults
+    const accessTypes = categories && categories.length > 0 ? categories : DefaultAccessTypes;
+
+    // Track pending "altro" values that haven't been saved yet
+    const [pendingAltro, setPendingAltro] = useState({});
+
+    // Handle adding a new subcategory from the "Altro" text input
+    const handleSaveAltroAsSubcategory = useCallback((typeValue) => {
+        const altroText = state[typeValue]?.altroText?.trim();
+        if (!altroText) return;
+
+        // Call the callback to persist the new subcategory
+        if (onNewSubcategory) {
+            onNewSubcategory(typeValue, altroText);
+        }
+
+        // Add the new value to selected subcategories
+        const currentSubcats = state[typeValue]?.subCategories || [];
+        if (!currentSubcats.includes(altroText)) {
+            // Remove "Altro" from selection and add the actual value
+            const newSubcats = currentSubcats.filter(s => s !== 'Altro');
+            newSubcats.push(altroText);
+            onChange(typeValue, 'subCategories', newSubcats);
+        }
+
+        // Clear the altro text
+        onChange(typeValue, 'altroText', '');
+        setPendingAltro(prev => ({ ...prev, [typeValue]: false }));
+    }, [state, onChange, onNewSubcategory]);
 
     const isTypeValid = (typeValue) => {
         const typeState = state[typeValue];
@@ -32,10 +63,10 @@ export default function AccessServicesForm({
     };
 
     return (
-        <Tabs defaultValue={AccessTypes[0].value} className="flex-1 flex flex-col overflow-hidden">
+        <Tabs defaultValue={accessTypes[0]?.value} className="flex-1 flex flex-col overflow-hidden">
             <div className="mb-4 overflow-x-auto rounded-md bg-gray-100 border-b px-1">
                 <TabsList className="flex w-max space-x-2 overflow-x-auto">
-                    {AccessTypes.map((type) => {
+                    {accessTypes.map((type) => {
                         const isValid = isTypeValid(type.value);
                         return (
                             <TabsTrigger
@@ -53,7 +84,7 @@ export default function AccessServicesForm({
                 </TabsList>
             </div>
 
-            {AccessTypes.map((type) => {
+            {accessTypes.map((type) => {
                 const typeState = state[type.value];
                 // Safely fallback if state isn't initialized yet (though it should be)
                 if (!typeState) return null;
@@ -63,31 +94,50 @@ export default function AccessServicesForm({
                         <div className={clsx("grid gap-4 align-top grid-cols-1 md:grid-cols-2")}>
                             {/* Subcategories */}
                             <div className="flex flex-col gap-2 min-w-0">
-                                <CreateMultiCombobox
+                                <MultiCombobox
                                     label="Sottocategorie"
                                     values={typeState.subCategories}
                                     onChange={(values) => {
                                         onChange(type.value, "subCategories", values);
                                         if (!values.includes("Altro")) {
                                             onChange(type.value, "altroText", "");
+                                            setPendingAltro(prev => ({ ...prev, [type.value]: false }));
+                                        } else {
+                                            setPendingAltro(prev => ({ ...prev, [type.value]: true }));
                                         }
                                     }}
-                                    options={type.subCategories || []}
+                                    options={[...(type.subCategories || []), ...(type.subCategories?.includes('Altro') ? [] : ['Altro'])]}
                                     placeholder="Seleziona sottocategorie..."
                                 />
                             </div>
 
-                            {/* Altro Input */}
+                            {/* Altro Input - shows when "Altro" is selected */}
                             {typeState.subCategories.includes("Altro") && (
                                 <div className="flex flex-col gap-2 align-top">
-                                    {/* Just using a generic Label here to match both designs roughly, 
-                        though one had specific htmlFor */}
-                                    <Label>Specifica "Altro"</Label>
-                                    <Input
-                                        value={typeState.altroText}
-                                        onChange={(e) => onChange(type.value, "altroText", e.target.value)}
-                                        placeholder="Descrizione..."
-                                    />
+                                    <Label>Specifica "Altro" (verrà salvato come nuova sottocategoria)</Label>
+                                    <div className="flex gap-2">
+                                        <Input
+                                            value={typeState.altroText}
+                                            onChange={(e) => onChange(type.value, "altroText", e.target.value)}
+                                            placeholder="Nuova sottocategoria..."
+                                            className="flex-1"
+                                        />
+                                        {onNewSubcategory && typeState.altroText?.trim() && (
+                                            <Button
+                                                type="button"
+                                                variant="secondary"
+                                                size="sm"
+                                                onClick={() => handleSaveAltroAsSubcategory(type.value)}
+                                            >
+                                                Aggiungi
+                                            </Button>
+                                        )}
+                                    </div>
+                                    {onNewSubcategory && (
+                                        <p className="text-xs text-muted-foreground">
+                                            Clicca "Aggiungi" per salvare come nuova sottocategoria disponibile per tutti
+                                        </p>
+                                    )}
                                 </div>
                             )}
                         </div>

@@ -1,23 +1,59 @@
-import { useState, useCallback } from 'react';
-import { AccessTypes } from '@/components/Anagrafica/AccessDialog/AccessTypes';
+import { useState, useCallback, useMemo, useEffect } from 'react';
+import { AccessTypes as DefaultAccessTypes } from '@/components/Anagrafica/AccessDialog/AccessTypes';
 import { convertFileToBase64 } from '@/utils/fileUtils';
 
-const initialFormState = AccessTypes.reduce((acc, type) => {
-    acc[type.value] = {
-        subCategories: [],
-        altroText: "",
-        content: "", // notes
-        files: [],
-        classification: "",
-        referralEntity: "",
-        reminderDate: null,
-        reminderTime: "",
-    };
-    return acc;
-}, {});
+/**
+ * Creates initial form state from a list of categories
+ */
+function createInitialState(categories) {
+    return (categories || DefaultAccessTypes).reduce((acc, type) => {
+        acc[type.value] = {
+            subCategories: [],
+            altroText: "",
+            content: "", // notes
+            files: [],
+            classification: "",
+            referralEntity: "",
+            reminderDate: null,
+            reminderTime: "",
+        };
+        return acc;
+    }, {});
+}
 
-export function useAccessForm() {
-    const [accessState, setAccessState] = useState(initialFormState);
+export function useAccessForm(categories = null) {
+    // Use provided categories or fall back to defaults
+    const accessTypes = useMemo(() => {
+        return categories && categories.length > 0 ? categories : DefaultAccessTypes;
+    }, [categories]);
+
+    const [accessState, setAccessState] = useState(() => createInitialState(accessTypes));
+
+    // Update state when categories change (add new category types)
+    useEffect(() => {
+        setAccessState((prevState) => {
+            const newState = { ...prevState };
+            let hasChanges = false;
+
+            for (const type of accessTypes) {
+                if (!newState[type.value]) {
+                    newState[type.value] = {
+                        subCategories: [],
+                        altroText: "",
+                        content: "",
+                        files: [],
+                        classification: "",
+                        referralEntity: "",
+                        reminderDate: null,
+                        reminderTime: "",
+                    };
+                    hasChanges = true;
+                }
+            }
+
+            return hasChanges ? newState : prevState;
+        });
+    }, [accessTypes]);
 
     const updateAccessField = useCallback((typeVal, field, value) => {
         setAccessState((prev) => ({
@@ -30,8 +66,8 @@ export function useAccessForm() {
     }, []);
 
     const resetAccessForm = useCallback(() => {
-        setAccessState(initialFormState);
-    }, []);
+        setAccessState(createInitialState(accessTypes));
+    }, [accessTypes]);
 
     const isAccessTypeValid = useCallback((typeVal) => {
         const s = accessState[typeVal];
@@ -44,8 +80,8 @@ export function useAccessForm() {
     }, [accessState]);
 
     const getValidAccessTypes = useCallback(() => {
-        return AccessTypes.filter((t) => isAccessTypeValid(t.value));
-    }, [isAccessTypeValid]);
+        return accessTypes.filter((t) => isAccessTypeValid(t.value));
+    }, [accessTypes, isAccessTypeValid]);
 
     const prepareAccessPayload = useCallback(async () => {
         const validTypes = getValidAccessTypes();

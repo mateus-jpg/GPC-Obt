@@ -1,4 +1,18 @@
 import { NextResponse } from "next/server";
+import { getCachedSession, setCachedSession } from "@/utils/session-cache";
+
+function sanitizeHeader(value) {
+  return (value || '').replace(/[\r\n]/g, '');
+}
+
+function createResponseWithUserHeaders(req, user) {
+  const headers = new Headers(req.headers);
+  headers.set('x-user-uid', sanitizeHeader(user.uid));
+  headers.set('x-user-email', sanitizeHeader(user.email));
+  if (user.role) headers.set('x-user-role', sanitizeHeader(user.role));
+  if (user.structureIds) headers.set('x-user-structures', JSON.stringify(user.structureIds));
+  return NextResponse.next({ request: { headers } });
+}
 
 export async function middleware(req) {
   const cookieName = process.env.SESSION_COOKIE_NAME || "session";
@@ -19,21 +33,31 @@ export async function middleware(req) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Construct the absolute URL for the verification API route
-  // Use the host header as a fallback for local development
+  // Check session cache first (reduces /api/auth/verify calls)
+  const cachedUser = getCachedSession(sessionCookie);
+  if (cachedUser) {
+    return createResponseWithUserHeaders(req, cachedUser);
+  }
+
+  // Cache miss - verify session via API
   const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
   const protocol = req.headers.get('x-forwarded-proto') || 'http';
   const absoluteUrl = `${protocol}://${host}/api/auth/verify`;
 
+  // Create AbortController for timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
 
-  // Verify the session by calling the internal API route
   try {
     const verifyRes = await fetch(absoluteUrl, {
       headers: {
         cookie: req.headers.get("cookie") || "",
         'cache-control': 'no-cache',
       },
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (!verifyRes.ok) {
       throw new Error("Session verification fetch failed");
@@ -41,28 +65,20 @@ export async function middleware(req) {
 
     const { user } = await verifyRes.json();
 
-    // Pass user info to the page via request headers
-    const requestHeaders = new Headers(req.headers);
-    requestHeaders.set('x-user-uid', user.uid);
-    requestHeaders.set('x-user-email', user.email || '');
+    // Cache the verified session for future requests
+    setCachedSession(sessionCookie, user);
 
-
-    return NextResponse.next({
-      request: {
-        headers: requestHeaders,
-      }
-    });
+    return createResponseWithUserHeaders(req, user);
 
   } catch (error) {
     // Session verification failed - redirect to login
-    // Note: Using console.error here since middleware runs in edge runtime
-    // and doesn't have access to our logger utility
     if (process.env.NODE_ENV !== 'production') {
       console.error(`Session verification error for ${pathname}:`, error.message);
     }
 
     // If verification fails, clear the invalid cookie and redirect
     const loginUrl = new URL("/login", req.url);
+    loginUrl.searchParams.set("from", pathname);
     const response = NextResponse.redirect(loginUrl);
     response.cookies.set(cookieName, "", { maxAge: -1, path: "/" });
 
