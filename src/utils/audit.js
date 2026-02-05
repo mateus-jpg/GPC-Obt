@@ -99,3 +99,166 @@ export async function logResourceModification({
         details
     });
 }
+
+/**
+ * Logs a data access event (read operation)
+ * Used for tracking who accessed sensitive personal data
+ *
+ * @param {Object} params - Log parameters
+ * @param {string} params.actorUid - UID of the user accessing the data
+ * @param {string} params.resourceType - Type of resource ('anagrafica', 'accessi')
+ * @param {string} params.resourceId - ID of the resource being accessed
+ * @param {string} [params.structureId] - Structure through which access was made
+ * @param {Object} [params.details] - Additional context
+ * @returns {Promise<void>}
+ */
+export async function logDataAccess({
+    actorUid,
+    resourceType,
+    resourceId,
+    structureId = null,
+    details = {}
+}) {
+    return logAdminAction({
+        action: `${resourceType}_read`,
+        actorUid,
+        resourceType,
+        resourceId,
+        details: {
+            ...details,
+            structureId,
+            accessType: 'read'
+        }
+    });
+}
+
+/**
+ * Logs a data creation event
+ *
+ * @param {Object} params - Log parameters
+ * @param {string} params.actorUid - UID of the user creating the data
+ * @param {string} params.resourceType - Type of resource ('anagrafica', 'accessi')
+ * @param {string} params.resourceId - ID of the created resource
+ * @param {string} [params.structureId] - Structure through which creation was made
+ * @param {Object} [params.details] - Additional context
+ * @returns {Promise<void>}
+ */
+export async function logDataCreate({
+    actorUid,
+    resourceType,
+    resourceId,
+    structureId = null,
+    details = {}
+}) {
+    return logAdminAction({
+        action: `${resourceType}_create`,
+        actorUid,
+        resourceType,
+        resourceId,
+        details: {
+            ...details,
+            structureId,
+            accessType: 'create'
+        }
+    });
+}
+
+/**
+ * Logs a data update event
+ *
+ * @param {Object} params - Log parameters
+ * @param {string} params.actorUid - UID of the user updating the data
+ * @param {string} params.resourceType - Type of resource ('anagrafica', 'accessi')
+ * @param {string} params.resourceId - ID of the updated resource
+ * @param {string} [params.structureId] - Structure through which update was made
+ * @param {string[]} [params.changedFields] - List of fields that were changed
+ * @param {Object} [params.details] - Additional context
+ * @returns {Promise<void>}
+ */
+export async function logDataUpdate({
+    actorUid,
+    resourceType,
+    resourceId,
+    structureId = null,
+    changedFields = [],
+    details = {}
+}) {
+    return logAdminAction({
+        action: `${resourceType}_update`,
+        actorUid,
+        resourceType,
+        resourceId,
+        details: {
+            ...details,
+            structureId,
+            changedFields,
+            accessType: 'update'
+        }
+    });
+}
+
+/**
+ * Logs a data deletion event
+ *
+ * @param {Object} params - Log parameters
+ * @param {string} params.actorUid - UID of the user deleting the data
+ * @param {string} params.resourceType - Type of resource ('anagrafica', 'accessi')
+ * @param {string} params.resourceId - ID of the deleted resource
+ * @param {string} [params.structureId] - Structure through which deletion was made
+ * @param {boolean} [params.softDelete=true] - Whether this is a soft delete
+ * @param {Object} [params.details] - Additional context
+ * @returns {Promise<void>}
+ */
+export async function logDataDelete({
+    actorUid,
+    resourceType,
+    resourceId,
+    structureId = null,
+    softDelete = true,
+    details = {}
+}) {
+    return logAdminAction({
+        action: `${resourceType}_delete`,
+        actorUid,
+        resourceType,
+        resourceId,
+        details: {
+            ...details,
+            structureId,
+            softDelete,
+            accessType: 'delete'
+        }
+    });
+}
+
+/**
+ * Logs a file access event
+ *
+ * @param {Object} params - Log parameters
+ * @param {string} params.actorUid - UID of the user accessing the file
+ * @param {string} params.resourceId - ID of the parent resource (anagraficaId)
+ * @param {string} params.filePath - Path of the file being accessed
+ * @param {string} [params.structureId] - Structure through which access was made
+ * @param {Object} [params.details] - Additional context
+ * @returns {Promise<void>}
+ */
+export async function logFileAccess({
+    actorUid,
+    resourceId,
+    filePath,
+    structureId = null,
+    details = {}
+}) {
+    return logAdminAction({
+        action: 'file_access',
+        actorUid,
+        resourceType: 'file',
+        resourceId,
+        details: {
+            ...details,
+            filePath,
+            structureId,
+            accessType: 'read'
+        }
+    });
+}

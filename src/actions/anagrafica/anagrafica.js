@@ -7,6 +7,7 @@ import { createAccessInternal } from './access';
 import { createHistoryEntry } from './history';
 import { computeGroupChanges } from '@/utils/anagraficaUtils';
 import { CACHE_TAGS, REVALIDATE, invalidateAnagraficaCaches } from '@/lib/cache';
+import { logDataCreate, logDataAccess, logDataUpdate, logDataDelete } from '@/utils/audit';
 
 const adminDb = admin.firestore();
 
@@ -69,6 +70,13 @@ export async function getAnagraficaInternal(anagraficaId, userUid) {
   await verifyUserPermissions({
     userUid,
     allowedStructures
+  });
+
+  // Audit log: anagrafica read
+  await logDataAccess({
+    actorUid: userUid,
+    resourceType: 'anagrafica',
+    resourceId: anagraficaId
   });
 
   return anagraficaData;
@@ -150,6 +158,15 @@ export async function updateAnagraficaInternal(anagraficaId, body, userUid, user
     });
   }
 
+  // Audit log: anagrafica update
+  await logDataUpdate({
+    actorUid: userUid,
+    resourceType: 'anagrafica',
+    resourceId: anagraficaId,
+    structureId,
+    changedFields: result.changedGroups
+  });
+
   // Invalidate caches after successful update
   invalidateAnagraficaCaches(anagraficaId, result.allowedStructures);
 
@@ -208,6 +225,14 @@ export async function deleteAnagraficaInternal(anagraficaId, userUid) {
 
   // Invalidate caches after successful delete
   invalidateAnagraficaCaches(anagraficaId, allowedStructures);
+
+  // Audit log: anagrafica delete (soft delete)
+  await logDataDelete({
+    actorUid: userUid,
+    resourceType: 'anagrafica',
+    resourceId: anagraficaId,
+    softDelete: true
+  });
 
   return { success: true, message: 'Scheda eliminata con successo' };
 }
@@ -268,6 +293,18 @@ export async function createAnagrafica(body, services = []) {
 
     // 5. INVALIDATE CACHES for all structures that can access this record
     invalidateAnagraficaCaches(anagraficaId, docData.canBeAccessedBy || []);
+
+    // 6. AUDIT LOG: anagrafica creation
+    await logDataCreate({
+      actorUid: userUid,
+      resourceType: 'anagrafica',
+      resourceId: anagraficaId,
+      structureId: body.registeredByStructure,
+      details: {
+        hasServices: services && services.length > 0,
+        servicesCount: services?.length || 0
+      }
+    });
 
     return JSON.stringify({ id: anagraficaId });
 

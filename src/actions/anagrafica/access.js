@@ -8,6 +8,7 @@ import { stripHtml } from '@/utils/htmlSanitizer';
 import { requireUser, verifyUserPermissions } from '@/utils/server-auth';
 import { FILE_SIZE_LIMIT, ALLOWED_MIME_TYPES, validateFileSignature } from '@/utils/fileValidation';
 import { CACHE_TAGS, REVALIDATE, invalidateAccessiCache } from '@/lib/cache';
+import { logDataCreate, logDataAccess, logFileAccess } from '@/utils/audit';
 
 const adminDb = admin.firestore();
 const adminStorage = admin.storage();
@@ -180,6 +181,19 @@ export async function createAccessAction(payload) {
     structureIds: allowedStructures,
   });
 
+  // Audit log: access record creation
+  await logDataCreate({
+    actorUid: userUid,
+    resourceType: 'accessi',
+    resourceId: accessId,
+    structureId,
+    details: {
+      anagraficaId,
+      servicesCount: services.length,
+      serviceTypes: services.map(s => s.tipoAccesso).filter(Boolean)
+    }
+  });
+
   return { success: true, accessId, accessData };
 }
 
@@ -261,6 +275,16 @@ export async function getAccessAction(anagraficaId) {
 
   const accessi = await getCachedAccessi();
 
+  // Audit log: access records read
+  await logDataAccess({
+    actorUid: userUid,
+    resourceType: 'accessi',
+    resourceId: anagraficaId,
+    details: {
+      accessCount: accessi.length
+    }
+  });
+
   return {
     success: true,
     count: accessi.length,
@@ -308,6 +332,13 @@ export async function getAccessFileUrl({ anagraficaId, filePath }) {
       action: 'read',
       expires: Date.now() + 1000 * 60 * 60, // 1 hour
     });
+
+  // Audit log: file access
+  await logFileAccess({
+    actorUid: userUid,
+    resourceId: anagraficaId,
+    filePath: normalizedPath
+  });
 
   return { success: true, url };
 }
