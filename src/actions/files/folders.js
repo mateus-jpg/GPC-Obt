@@ -174,36 +174,52 @@ export async function getFolderTree(anagraficaId) {
  * Get folder contents (files + subfolders)
  *
  * @param {Object} params
- * @param {string} params.folderId - Folder ID
+ * @param {string} params.folderId - Folder ID (null for root)
+ * @param {string} params.anagraficaId - Anagrafica ID (required when folderId is null)
  * @param {boolean} params.includeSubfolders - Include subfolders in results
  * @returns {Promise<Object>} Folder contents
  */
-export async function getFolderContents({ folderId, includeSubfolders = true }) {
+export async function getFolderContents({ folderId, anagraficaId = null, includeSubfolders = true }) {
   try {
     // 1. AUTHENTICATION
     const { userUid } = await requireUser();
 
-    // 2. GET FOLDER
-    const folderDoc = await adminDb.collection('folders').doc(folderId).get();
+    let folderData = null;
+    let targetAnagraficaId = anagraficaId;
 
-    if (!folderDoc.exists) {
-      throw new Error('Folder not found');
+    // 2. HANDLE ROOT VS SPECIFIC FOLDER
+    if (folderId === null) {
+      // ROOT DIRECTORY
+      if (!anagraficaId) {
+        throw new Error('anagraficaId is required for root directory');
+      }
+      // Verify access to anagrafica
+      await getAnagraficaInternal(anagraficaId, userUid);
+    } else {
+      // SPECIFIC FOLDER
+      const folderDoc = await adminDb.collection('folders').doc(folderId).get();
+
+      if (!folderDoc.exists) {
+        throw new Error('Folder not found');
+      }
+
+      folderData = folderDoc.data();
+
+      if (folderData.deleted) {
+        throw new Error('Folder not found');
+      }
+
+      targetAnagraficaId = folderData.anagraficaId;
+
+      // Verify access to anagrafica
+      await getAnagraficaInternal(targetAnagraficaId, userUid);
     }
 
-    const folderData = folderDoc.data();
-
-    if (folderData.deleted) {
-      throw new Error('Folder not found');
-    }
-
-    // 3. VERIFY ACCESS TO ANAGRAFICA
-    await getAnagraficaInternal(folderData.anagraficaId, userUid);
-
-    // 4. GET SUBFOLDERS
+    // 3. GET SUBFOLDERS
     let subfolders = [];
     if (includeSubfolders) {
       const subfoldersSnapshot = await adminDb.collection('folders')
-        .where('anagraficaId', '==', folderData.anagraficaId)
+        .where('anagraficaId', '==', targetAnagraficaId)
         .where('parentFolderId', '==', folderId)
         .where('deleted', '==', false)
         .orderBy('nome', 'asc')
@@ -217,9 +233,9 @@ export async function getFolderContents({ folderId, includeSubfolders = true }) 
       }));
     }
 
-    // 5. GET FILES IN THIS FOLDER
+    // 4. GET FILES IN THIS FOLDER/ROOT
     const filesSnapshot = await adminDb.collection('files')
-      .where('anagraficaId', '==', folderData.anagraficaId)
+      .where('anagraficaId', '==', targetAnagraficaId)
       .where('folderId', '==', folderId)
       .where('deleted', '==', false)
       .orderBy('createdAt', 'desc')
@@ -235,37 +251,47 @@ export async function getFolderContents({ folderId, includeSubfolders = true }) 
       updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString() || doc.data().updatedAt
     }));
 
-    // 6. BUILD BREADCRUMBS
+    // 5. BUILD BREADCRUMBS
     const breadcrumbs = [];
-    let currentFolder = { id: folderDoc.id, ...folderData };
 
-    while (currentFolder) {
-      breadcrumbs.unshift({
-        id: currentFolder.id,
-        nome: currentFolder.nome,
-        path: currentFolder.path
+    if (folderId === null) {
+      // Root has no breadcrumbs (or just a "Root" entry)
+      breadcrumbs.push({
+        id: null,
+        nome: 'Root',
+        path: '/'
       });
+    } else {
+      let currentFolder = { id: folderId, ...folderData };
 
-      if (currentFolder.parentFolderId) {
-        const parentDoc = await adminDb.collection('folders').doc(currentFolder.parentFolderId).get();
-        if (parentDoc.exists) {
-          currentFolder = { id: parentDoc.id, ...parentDoc.data() };
+      while (currentFolder) {
+        breadcrumbs.unshift({
+          id: currentFolder.id,
+          nome: currentFolder.nome,
+          path: currentFolder.path
+        });
+
+        if (currentFolder.parentFolderId) {
+          const parentDoc = await adminDb.collection('folders').doc(currentFolder.parentFolderId).get();
+          if (parentDoc.exists) {
+            currentFolder = { id: parentDoc.id, ...parentDoc.data() };
+          } else {
+            break;
+          }
         } else {
           break;
         }
-      } else {
-        break;
       }
     }
 
     return {
       success: true,
-      folder: {
-        id: folderDoc.id,
+      folder: folderData ? {
+        id: folderId,
         ...folderData,
         createdAt: folderData.createdAt?.toDate?.()?.toISOString() || folderData.createdAt,
         updatedAt: folderData.updatedAt?.toDate?.()?.toISOString() || folderData.updatedAt
-      },
+      } : null,
       subfolders,
       files,
       breadcrumbs,
@@ -282,6 +308,115 @@ export async function getFolderContents({ folderId, includeSubfolders = true }) 
       message: error.message
     };
   }
+}
+
+/**
+ * Internal function to create a folder
+ */
+export async function createFolderInternal({ anagraficaId, nome, parentFolderId = null, structureId, userUid, userEmail }) {
+  // 3. VALIDATE FOLDER NAME
+  if (!nome || nome.trim().length === 0) {
+    throw new Error('Folder name is required');
+  }
+
+  if (nome.length > 100) {
+    throw new Error('Folder name must be 100 characters or less');
+  }
+
+  // 4. GET PARENT FOLDER (if specified)
+  let depth = 0;
+  let path = `/${nome}`;
+  let parentPath = '';
+
+  if (parentFolderId) {
+    const parentDoc = await adminDb.collection('folders').doc(parentFolderId).get();
+
+    if (!parentDoc.exists || parentDoc.data().deleted) {
+      throw new Error('Parent folder not found');
+    }
+
+    const parentData = parentDoc.data();
+
+    // Verify parent belongs to same anagrafica
+    if (parentData.anagraficaId !== anagraficaId) {
+      throw new Error('Parent folder belongs to different anagrafica');
+    }
+
+    depth = parentData.depth + 1;
+    parentPath = parentData.path;
+    path = `${parentPath}/${nome}`;
+
+    // Check max depth
+    if (depth > MAX_FOLDER_DEPTH) {
+      throw new Error(`Maximum folder depth of ${MAX_FOLDER_DEPTH} exceeded`);
+    }
+  }
+
+  // Check permissions inheritance for the new folder
+  let allowedStructures = [];
+  if (anagraficaId) {
+    const anagraficaDoc = await adminDb.collection('anagrafica').doc(anagraficaId).get();
+    if (anagraficaDoc.exists) {
+      allowedStructures = anagraficaDoc.data().canBeAccessedBy || anagraficaDoc.data().structureIds || [];
+    }
+  }
+
+  // 5. CREATE FOLDER
+  const folderData = {
+    nome: nome.trim(),
+
+    // Hierarchy
+    anagraficaId,
+    parentFolderId,
+    path,
+    depth,
+
+    // Metadata
+    isDefaultCategory: false,
+    category: null,
+
+    // Access Control
+    structureIds: allowedStructures,
+
+    // Audit
+    createdAt: new Date(),
+    createdBy: userUid,
+    createdByEmail: userEmail,
+    updatedAt: new Date(),
+
+    // Soft Delete
+    deleted: false,
+    deletedAt: null,
+    deletedBy: null
+  };
+
+  const folderRef = await adminDb.collection('folders').add(folderData);
+
+  // 6. AUDIT LOG
+  await logDataCreate({
+    actorUid: userUid,
+    resourceType: 'folder',
+    resourceId: folderRef.id,
+    structureId,
+    details: {
+      anagraficaId,
+      folderName: nome,
+      parentFolderId,
+      depth
+    }
+  });
+
+  // 7. INVALIDATE CACHE
+  const affectedFolders = parentFolderId ? [parentFolderId] : [];
+  invalidateFolderCaches(anagraficaId, affectedFolders);
+
+  return {
+    success: true,
+    folder: {
+      id: folderRef.id,
+      ...folderData
+    }
+  };
 }
 
 /**
@@ -304,100 +439,14 @@ export async function createFolder({ anagraficaId, nome, parentFolderId = null, 
     const anagraficaData = await getAnagraficaInternal(anagraficaId, userUid);
     await verifyUserPermissions({ userUid, structureId });
 
-    // 3. VALIDATE FOLDER NAME
-    if (!nome || nome.trim().length === 0) {
-      throw new Error('Folder name is required');
-    }
-
-    if (nome.length > 100) {
-      throw new Error('Folder name must be 100 characters or less');
-    }
-
-    // 4. GET PARENT FOLDER (if specified)
-    let depth = 0;
-    let path = `/${nome}`;
-    let parentPath = '';
-
-    if (parentFolderId) {
-      const parentDoc = await adminDb.collection('folders').doc(parentFolderId).get();
-
-      if (!parentDoc.exists || parentDoc.data().deleted) {
-        throw new Error('Parent folder not found');
-      }
-
-      const parentData = parentDoc.data();
-
-      // Verify parent belongs to same anagrafica
-      if (parentData.anagraficaId !== anagraficaId) {
-        throw new Error('Parent folder belongs to different anagrafica');
-      }
-
-      depth = parentData.depth + 1;
-      parentPath = parentData.path;
-      path = `${parentPath}/${nome}`;
-
-      // Check max depth
-      if (depth > MAX_FOLDER_DEPTH) {
-        throw new Error(`Maximum folder depth of ${MAX_FOLDER_DEPTH} exceeded`);
-      }
-    }
-
-    // 5. CREATE FOLDER
-    const folderData = {
-      nome: nome.trim(),
-
-      // Hierarchy
+    return await createFolderInternal({
       anagraficaId,
+      nome,
       parentFolderId,
-      path,
-      depth,
-
-      // Metadata
-      isDefaultCategory: false,
-      category: null,
-
-      // Access Control (inherit from anagrafica)
-      structureIds: anagraficaData.canBeAccessedBy || [],
-
-      // Audit
-      createdAt: new Date(),
-      createdBy: userUid,
-      createdByEmail: userEmail,
-      updatedAt: new Date(),
-
-      // Soft Delete
-      deleted: false,
-      deletedAt: null,
-      deletedBy: null
-    };
-
-    const folderRef = await adminDb.collection('folders').add(folderData);
-
-    // 6. AUDIT LOG
-    await logDataCreate({
-      actorUid: userUid,
-      resourceType: 'folder',
-      resourceId: folderRef.id,
       structureId,
-      details: {
-        anagraficaId,
-        folderName: nome,
-        parentFolderId,
-        depth
-      }
+      userUid,
+      userEmail
     });
-
-    // 7. INVALIDATE CACHE
-    const affectedFolders = parentFolderId ? [parentFolderId] : [];
-    invalidateFolderCaches(anagraficaId, affectedFolders);
-
-    return {
-      success: true,
-      folder: {
-        id: folderRef.id,
-        ...folderData
-      }
-    };
 
   } catch (error) {
     console.error('[CREATE_FOLDER_ERROR]:', error);
@@ -878,29 +927,34 @@ export async function moveFileToFolder({ fileId, targetFolderId, structureId }) 
       throw new Error('File not found');
     }
 
-    // 3. GET TARGET FOLDER
-    const targetFolderDoc = await adminDb.collection('folders').doc(targetFolderId).get();
+    // 3. GET TARGET FOLDER (if not root)
+    let targetFolderPath = '/'; // Default to root
+    if (targetFolderId) {
+      const targetFolderDoc = await adminDb.collection('folders').doc(targetFolderId).get();
 
-    if (!targetFolderDoc.exists) {
-      throw new Error('Target folder not found');
-    }
+      if (!targetFolderDoc.exists) {
+        throw new Error('Target folder not found');
+      }
 
-    const targetFolderData = targetFolderDoc.data();
+      const targetFolderData = targetFolderDoc.data();
 
-    if (targetFolderData.deleted) {
-      throw new Error('Target folder not found');
+      if (targetFolderData.deleted) {
+        throw new Error('Target folder not found');
+      }
+
+      // VERIFY FOLDER BELONGS TO SAME ANAGRAFICA
+      if (targetFolderData.anagraficaId !== fileData.anagraficaId) {
+        throw new Error('Cannot move file to folder in different anagrafica');
+      }
+
+      targetFolderPath = targetFolderData.path;
     }
 
     // 4. VERIFY ACCESS
     await getAnagraficaInternal(fileData.anagraficaId, userUid);
     await verifyUserPermissions({ userUid, structureId });
 
-    // 5. VERIFY FOLDER BELONGS TO SAME ANAGRAFICA
-    if (targetFolderData.anagraficaId !== fileData.anagraficaId) {
-      throw new Error('Cannot move file to folder in different anagrafica');
-    }
-
-    // 6. CHECK IF ALREADY IN TARGET FOLDER
+    // 5. CHECK IF ALREADY IN TARGET FOLDER
     if (fileData.folderId === targetFolderId) {
       return {
         success: true,
@@ -927,7 +981,7 @@ export async function moveFileToFolder({ fileId, targetFolderId, structureId }) 
         fileName: fileData.nome,
         oldFolderId,
         targetFolderId,
-        targetFolderPath: targetFolderData.path
+        targetFolderPath
       }
     });
 
@@ -971,21 +1025,35 @@ export async function moveFilesToFolder({ fileIds, targetFolderId, structureId }
       throw new Error('Cannot move more than 500 files at once');
     }
 
-    // 3. GET TARGET FOLDER
-    const targetFolderDoc = await adminDb.collection('folders').doc(targetFolderId).get();
+    // 3. GET TARGET FOLDER (if not root) and verify access
+    let targetFolderData = null;
+    let anagraficaId = null;
 
-    if (!targetFolderDoc.exists) {
-      throw new Error('Target folder not found');
-    }
+    if (targetFolderId) {
+      const targetFolderDoc = await adminDb.collection('folders').doc(targetFolderId).get();
 
-    const targetFolderData = targetFolderDoc.data();
+      if (!targetFolderDoc.exists) {
+        throw new Error('Target folder not found');
+      }
 
-    if (targetFolderData.deleted) {
-      throw new Error('Target folder not found');
+      targetFolderData = targetFolderDoc.data();
+
+      if (targetFolderData.deleted) {
+        throw new Error('Target folder not found');
+      }
+
+      anagraficaId = targetFolderData.anagraficaId;
+    } else {
+      // Moving to root - need to get anagrafica from first file
+      const firstFileDoc = await adminDb.collection('files').doc(fileIds[0]).get();
+      if (!firstFileDoc.exists) {
+        throw new Error('No valid files found');
+      }
+      anagraficaId = firstFileDoc.data().anagraficaId;
     }
 
     // 4. VERIFY ACCESS TO ANAGRAFICA
-    await getAnagraficaInternal(targetFolderData.anagraficaId, userUid);
+    await getAnagraficaInternal(anagraficaId, userUid);
     await verifyUserPermissions({ userUid, structureId });
 
     // 5. GET ALL FILES AND VALIDATE
@@ -1003,7 +1071,7 @@ export async function moveFilesToFolder({ fileIds, targetFolderId, structureId }
       const fileData = fileDoc.data();
 
       // Verify file belongs to same anagrafica
-      if (fileData.anagraficaId !== targetFolderData.anagraficaId) {
+      if (fileData.anagraficaId !== anagraficaId) {
         console.warn(`Skipping file ${fileId}: belongs to different anagrafica`);
         continue;
       }

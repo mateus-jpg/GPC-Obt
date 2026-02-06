@@ -9,11 +9,14 @@ import { requireUser, verifyUserPermissions } from '@/utils/server-auth';
 import { FILE_SIZE_LIMIT, ALLOWED_MIME_TYPES, validateFileSignature } from '@/utils/fileValidation';
 import { CACHE_TAGS, REVALIDATE, invalidateAccessiCache, invalidateFilesCache } from '@/lib/cache';
 import { logDataCreate, logDataAccess, logFileAccess } from '@/utils/audit';
-import { initializeDefaultFolders } from '@/actions/files/folders';
+import { initializeDefaultFolders, createFolderInternal } from '@/actions/files/folders';
 import { FILE_CATEGORIES } from '@/config/constants';
 
 const adminDb = admin.firestore();
 const adminStorage = admin.storage();
+
+// Mapping between Access Types (from AccessTypes.js) and File Categories (from constants.js)
+// ACCESS_TYPE_TO_FILE_CATEGORY removed - using dynamic folder creation instead
 
 export async function createAccessInternal({ anagraficaId, services, structureId, userUid, structureIds }) {
   const accessRef = adminDb.collection('accessi').doc();
@@ -27,11 +30,62 @@ export async function createAccessInternal({ anagraficaId, services, structureId
     null // No email needed for internal calls
   );
 
-  // Find the DOCUMENT folder for access files
-  const documentFolder = foldersResult.folders?.find(f => f.category === FILE_CATEGORIES.DOCUMENT);
-  const targetFolderId = documentFolder?.id || null;
+  // Determine fallback document folder
+  const defaultDocumentFolder = foldersResult.folders?.find(f => f.category === FILE_CATEGORIES.DOCUMENT);
 
   const processedServices = await Promise.all(services.map(async (svc, index) => {
+    // Determine target folder based on service type name
+    // e.g. "Legale" -> look for folder named "Legale"
+    let targetFolderName = svc.tipoAccesso;
+    if (!targetFolderName) {
+      targetFolderName = "Documenti"; // Default fallback name
+    }
+
+    let targetFolder = foldersResult.folders?.find(f => f.nome === targetFolderName);
+
+    // If not found in loaded folders, check DB explicitly (it might be a custom folder)
+    if (!targetFolder && targetFolderName) {
+      try {
+        // Check if folder exists in DB
+        const folderQuery = await adminDb.collection('folders')
+          .where('anagraficaId', '==', anagraficaId)
+          .where('nome', '==', targetFolderName)
+          .where('deleted', '==', false)
+          .limit(1)
+          .get();
+
+        if (!folderQuery.empty) {
+          targetFolder = { id: folderQuery.docs[0].id, ...folderQuery.docs[0].data() };
+        } else {
+          // Create new folder dynamically
+          console.log(`Creating new folder for category: ${targetFolderName}`);
+          const newFolderResult = await createFolderInternal({
+            anagraficaId,
+            nome: targetFolderName,
+            parentFolderId: null, // Root folder
+            structureId,
+            userUid,
+            userEmail: null // Internal action, no email handy but acceptable
+          });
+
+          if (newFolderResult.success) {
+            targetFolder = newFolderResult.folder;
+          }
+        }
+      } catch (err) {
+        console.error("Error finding/creating folder:", err);
+      }
+    }
+
+    // Fallback if everything fails
+    const targetFolderId = targetFolder?.id || defaultDocumentFolder?.id || null;
+
+    console.log('--- DEBUG UPLOAD DYNAMIC ---');
+    console.log('Service Type:', svc.tipoAccesso);
+    console.log('Target Folder Name:', targetFolderName);
+    console.log('Target Folder Found/Created:', targetFolder ? `${targetFolder.nome} (${targetFolder.id})` : 'FALLBACK TO DEFAULT');
+    console.log('--------------------');
+
     const uploadedFiles = [];
 
     if (svc.files && svc.files.length > 0) {
@@ -127,7 +181,7 @@ export async function createAccessInternal({ anagraficaId, services, structureId
             anagraficaId,
             folderId: targetFolderId,
             accessoId: accessId,
-            category: FILE_CATEGORIES.DOCUMENT,
+            category: targetFolder?.category || null,
             tags: [],
 
             // Dates
