@@ -24,6 +24,10 @@ export const CACHE_TAGS = {
 
   // Access records (services)
   accessi: (anagraficaId) => `accessi-${anagraficaId}`,
+
+  // Files
+  files: (anagraficaId) => `files-${anagraficaId}`,
+  file: (fileId) => `file-${fileId}`,
 };
 
 /**
@@ -36,6 +40,7 @@ export const REVALIDATE = {
   anagraficaList: CACHE_CONFIG.REVALIDATE.ANAGRAFICA_LIST,
   anagraficaDetail: CACHE_CONFIG.REVALIDATE.ANAGRAFICA_DETAIL,
   accessi: CACHE_CONFIG.REVALIDATE.ACCESSI,
+  files: CACHE_CONFIG.REVALIDATE.FILES || 300, // 5 minutes default
 };
 
 /**
@@ -50,6 +55,9 @@ export function invalidateAnagraficaCaches(anagraficaId, structureIds = []) {
 
   // Invalidate accessi cache for this anagrafica
   revalidateTag(CACHE_TAGS.accessi(anagraficaId));
+
+  // Invalidate files cache for this anagrafica
+  revalidateTag(CACHE_TAGS.files(anagraficaId));
 
   // Invalidate all affected structure list caches
   for (const structureId of structureIds) {
@@ -81,6 +89,22 @@ export function invalidateUserProfileCache(userUid) {
 export function invalidateStructureCache(structureId) {
   revalidateTag(CACHE_TAGS.structure(structureId));
   revalidateTag(CACHE_TAGS.anagraficaList(structureId));
+}
+
+/**
+ * Helper to invalidate files cache for an anagrafica
+ * @param {string} anagraficaId - The anagrafica document ID
+ */
+export function invalidateFilesCache(anagraficaId) {
+  revalidateTag(CACHE_TAGS.files(anagraficaId));
+}
+
+/**
+ * Helper to invalidate a specific file cache
+ * @param {string} fileId - The file document ID
+ */
+export function invalidateFileCache(fileId) {
+  revalidateTag(CACHE_TAGS.file(fileId));
 }
 
 /**

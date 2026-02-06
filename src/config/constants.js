@@ -44,6 +44,7 @@ export const CACHE = {
     ANAGRAFICA_LIST: 60,      // 1 minute
     ANAGRAFICA_DETAIL: 120,   // 2 minutes
     ACCESSI: 60,              // 1 minute
+    FILES: 300,               // 5 minutes
   },
 };
 
@@ -163,6 +164,7 @@ export const COLLECTIONS = {
   STRUCTURES: 'structures',
   ANAGRAFICA: 'anagrafica',
   ACCESSI: 'accessi',
+  FILES: 'files',
   REMINDERS: 'reminders',
   AUDIT_LOGS: 'audit_logs',
 };
