@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardContent, } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, PencilIcon } from "lucide-react";
+import { ArrowLeft, PencilIcon, FolderOpen } from "lucide-react";
 import Otherinfo from "@/components/Anagrafica/Otherinfo";
 import HistoryTimeline from "@/components/Anagrafica/HistoryTimeline";
 import admin from "@/lib/firebase/firebaseAdmin";
@@ -152,6 +152,12 @@ export default async function AnagraficaViewPage({ params }) {
           </Link>
         </Button>
         <div className="flex gap-2">
+          <Button variant="outline" asChild>
+            <Link href={`/${structureId}/anagrafica/${anagrafica.id}/files`}>
+              <FolderOpen className="w-4 h-4 mr-2" />
+              Files & Documents
+            </Link>
+          </Button>
           {/* <EventDialog anagraficaId={anagrafica.id} structureId={structureId} /> */}
           <AccessDialog anagraficaId={anagrafica.id} structureId={structureId} />
         </div>

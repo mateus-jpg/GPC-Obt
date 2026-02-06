@@ -7,8 +7,10 @@ import path from 'path';
 import { stripHtml } from '@/utils/htmlSanitizer';
 import { requireUser, verifyUserPermissions } from '@/utils/server-auth';
 import { FILE_SIZE_LIMIT, ALLOWED_MIME_TYPES, validateFileSignature } from '@/utils/fileValidation';
-import { CACHE_TAGS, REVALIDATE, invalidateAccessiCache } from '@/lib/cache';
+import { CACHE_TAGS, REVALIDATE, invalidateAccessiCache, invalidateFilesCache } from '@/lib/cache';
 import { logDataCreate, logDataAccess, logFileAccess } from '@/utils/audit';
+import { initializeDefaultFolders } from '@/actions/files/folders';
+import { FILE_CATEGORIES } from '@/config/constants';
 
 const adminDb = admin.firestore();
 const adminStorage = admin.storage();
@@ -16,6 +18,18 @@ const adminStorage = admin.storage();
 export async function createAccessInternal({ anagraficaId, services, structureId, userUid, structureIds }) {
   const accessRef = adminDb.collection('accessi').doc();
   const accessId = accessRef.id;
+
+  // Initialize default folders for this anagrafica if not already done
+  const foldersResult = await initializeDefaultFolders(
+    anagraficaId,
+    structureIds,
+    userUid,
+    null // No email needed for internal calls
+  );
+
+  // Find the DOCUMENT folder for access files
+  const documentFolder = foldersResult.folders?.find(f => f.category === FILE_CATEGORIES.DOCUMENT);
+  const targetFolderId = documentFolder?.id || null;
 
   const processedServices = await Promise.all(services.map(async (svc, index) => {
     const uploadedFiles = [];
@@ -86,7 +100,7 @@ export async function createAccessInternal({ anagraficaId, services, structureId
         const fileRef = adminStorage.bucket().file(storagePath);
         await fileRef.save(buffer, { contentType: mimeType, resumable: false });
 
-        uploadedFiles.push({
+        const fileMetadata = {
           nome: metadata.nome || originalName,
           nomeOriginale: originalName,
           tipo: mimeType,
@@ -94,7 +108,53 @@ export async function createAccessInternal({ anagraficaId, services, structureId
           path: storagePath,
           dataCreazione: metadata.dataCreazione ? new Date(metadata.dataCreazione).toISOString() : new Date().toISOString(),
           dataScadenza: metadata.dataScadenza ? new Date(metadata.dataScadenza).toISOString() : null,
-        });
+        };
+
+        uploadedFiles.push(fileMetadata);
+
+        // ALSO save to files collection so it appears in folder structure
+        if (targetFolderId) {
+          const fileDocRef = adminDb.collection('files').doc();
+          await fileDocRef.set({
+            // File Information
+            nome: fileMetadata.nome,
+            nomeOriginale: fileMetadata.nomeOriginale,
+            tipo: fileMetadata.tipo,
+            dimensione: fileMetadata.dimensione,
+            path: fileMetadata.path,
+
+            // Links
+            anagraficaId,
+            folderId: targetFolderId,
+            accessoId: accessId,
+            category: FILE_CATEGORIES.DOCUMENT,
+            tags: [],
+
+            // Dates
+            dataDocumento: metadata.dataCreazione ? new Date(metadata.dataCreazione) : new Date(),
+            dataCreazione: new Date(),
+            dataScadenza: metadata.dataScadenza ? new Date(metadata.dataScadenza) : null,
+
+            // Access Control
+            structureIds: structureIds || [],
+            uploadedByStructure: structureId,
+
+            // Metadata
+            uploadedBy: userUid,
+            uploadedByEmail: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+
+            // Soft Delete
+            deleted: false,
+            deletedAt: null,
+            deletedBy: null,
+
+            // Access Tracking
+            lastAccessedAt: null,
+            accessCount: 0
+          });
+        }
       }
     }
 
@@ -141,8 +201,9 @@ export async function createAccessInternal({ anagraficaId, services, structureId
 
   await accessRef.set(accessData);
 
-  // Invalidate accessi cache after creating new access
+  // Invalidate caches after creating new access
   invalidateAccessiCache(anagraficaId);
+  invalidateFilesCache(anagraficaId);
 
   return { accessId, accessData };
 }

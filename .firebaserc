@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "default": "gpc-obt-dev",
+    "dev": "gpc-obt-dev",
+    "prod": "gpc-obt"
+  }
+}

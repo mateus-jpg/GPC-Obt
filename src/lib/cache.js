@@ -28,6 +28,11 @@ export const CACHE_TAGS = {
   // Files
   files: (anagraficaId) => `files-${anagraficaId}`,
   file: (fileId) => `file-${fileId}`,
+
+  // Folders
+  folders: (anagraficaId) => `folders-${anagraficaId}`,
+  folder: (folderId) => `folder-${folderId}`,
+  folderContents: (folderId) => `folder-contents-${folderId}`,
 };
 
 /**
@@ -105,6 +110,25 @@ export function invalidateFilesCache(anagraficaId) {
  */
 export function invalidateFileCache(fileId) {
   revalidateTag(CACHE_TAGS.file(fileId));
+}
+
+/**
+ * Helper to invalidate folder-related caches
+ * @param {string} anagraficaId - The anagrafica document ID
+ * @param {string[]} affectedFolderIds - Array of folder IDs that were affected
+ */
+export function invalidateFolderCaches(anagraficaId, affectedFolderIds = []) {
+  // Invalidate the folder tree for this anagrafica
+  revalidateTag(CACHE_TAGS.folders(anagraficaId));
+
+  // Invalidate specific folders and their contents
+  for (const folderId of affectedFolderIds) {
+    revalidateTag(CACHE_TAGS.folder(folderId));
+    revalidateTag(CACHE_TAGS.folderContents(folderId));
+  }
+
+  // Also invalidate files cache since folder operations may affect file visibility
+  invalidateFilesCache(anagraficaId);
 }
 
 /**

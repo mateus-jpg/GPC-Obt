@@ -6,26 +6,13 @@ import { requireUser, verifyUserPermissions } from '@/utils/server-auth';
 import { getAnagraficaInternal } from '../anagrafica/anagrafica';
 import { logDataCreate, logFileAccess, logDataDelete } from '@/utils/audit';
 import { CACHE_TAGS, REVALIDATE, invalidateFilesCache } from '@/lib/cache';
+import { initializeDefaultFolders } from './folders';
+import { FILE_CATEGORIES } from '@/config/constants';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 
 const adminDb = admin.firestore();
 const adminStorage = admin.storage();
-
-/**
- * File categories for organization
- */
-export const FILE_CATEGORIES = {
-  DOCUMENT: 'document',           // General documents
-  IDENTITY: 'identity',           // ID cards, passports
-  LEGAL: 'legal',                 // Legal documents
-  MEDICAL: 'medical',             // Medical records
-  EMPLOYMENT: 'employment',       // Work-related docs
-  EDUCATION: 'education',         // Educational certificates
-  HOUSING: 'housing',             // Housing documents
-  FINANCIAL: 'financial',         // Financial documents
-  OTHER: 'other'                  // Uncategorized
-};
 
 /**
  * Validates file before upload
@@ -82,7 +69,12 @@ function generateFilePath(anagraficaId, filename, category = 'general') {
 async function uploadToStorage(filePath, fileBuffer, contentType) {
   const bucket = adminStorage.bucket();
 
-  await bucket.file(filePath).save(fileBuffer, {
+  // Convert ArrayBuffer to Node.js Buffer if needed
+  const buffer = fileBuffer instanceof ArrayBuffer
+    ? Buffer.from(fileBuffer)
+    : fileBuffer;
+
+  await bucket.file(filePath).save(buffer, {
     metadata: {
       contentType,
       uploadedAt: new Date().toISOString()
@@ -98,6 +90,7 @@ async function uploadToStorage(filePath, fileBuffer, contentType) {
  */
 async function createFileDocument({
   anagraficaId,
+  folderId,
   accessoId = null,
   filePath,
   originalName,
@@ -106,6 +99,7 @@ async function createFileDocument({
   size,
   category = FILE_CATEGORIES.OTHER,
   tags = [],
+  documentDate = null,
   expirationDate = null,
   structureIds,
   uploadedByStructure,
@@ -122,11 +116,13 @@ async function createFileDocument({
 
     // Links
     anagraficaId,
+    folderId,
     accessoId,
     category,
     tags: tags || [],
 
     // Dates
+    dataDocumento: documentDate ? new Date(documentDate) : null,
     dataCreazione: new Date(),
     dataScadenza: expirationDate ? new Date(expirationDate) : null,
 
@@ -165,8 +161,9 @@ async function createFileDocument({
  * @param {Object} params
  * @param {string} params.anagraficaId - Required: Anagrafica ID
  * @param {Array} params.files - Array of file objects {name, type, size, buffer}
+ * @param {string} params.folderId - Required: Target folder ID (NEW - preferred)
  * @param {string} params.accessoId - Optional: Link to specific accesso
- * @param {string} params.category - Optional: File category
+ * @param {string} params.category - Optional: File category (DEPRECATED - for backward compatibility)
  * @param {string[]} params.tags - Optional: Custom tags
  * @param {string} params.expirationDate - Optional: Expiration date ISO string
  * @param {string} params.structureId - Structure uploading the file
@@ -174,6 +171,7 @@ async function createFileDocument({
 export async function uploadFiles({
   anagraficaId,
   files,
+  folderId = null,
   accessoId = null,
   category = FILE_CATEGORIES.OTHER,
   tags = [],
@@ -195,14 +193,52 @@ export async function uploadFiles({
       structureId
     });
 
-    // 3. VALIDATE FILES
+    // 3. INITIALIZE DEFAULT FOLDERS IF NEEDED (only if using folderId approach)
+    let targetFolderId = folderId;
+
+    if (!targetFolderId) {
+      // Backward compatibility: If no folderId provided, initialize default folders
+      // and find the folder matching the category
+      const foldersResult = await initializeDefaultFolders(
+        anagraficaId,
+        allowedStructures,
+        userUid,
+        userEmail
+      );
+
+      if (foldersResult.error) {
+        throw new Error(`Failed to initialize folders: ${foldersResult.message}`);
+      }
+
+      // Find folder matching the category
+      const categoryFolder = foldersResult.folders.find(f => f.category === category);
+
+      if (!categoryFolder) {
+        throw new Error(`No folder found for category: ${category}`);
+      }
+
+      targetFolderId = categoryFolder.id;
+    } else {
+      // Verify folder exists and belongs to this anagrafica
+      const folderDoc = await adminDb.collection('folders').doc(targetFolderId).get();
+
+      if (!folderDoc.exists || folderDoc.data().deleted) {
+        throw new Error('Target folder not found');
+      }
+
+      if (folderDoc.data().anagraficaId !== anagraficaId) {
+        throw new Error('Folder does not belong to this anagrafica');
+      }
+    }
+
+    // 4. VALIDATE FILES
     if (!files || !Array.isArray(files) || files.length === 0) {
       throw new Error('No files provided');
     }
 
     const uploadedFiles = [];
 
-    // 4. UPLOAD EACH FILE
+    // 5. UPLOAD EACH FILE
     for (const file of files) {
       try {
         // Validate file
@@ -215,8 +251,10 @@ export async function uploadFiles({
         await uploadToStorage(filePath, file.buffer, file.type);
 
         // Create Firestore document
+        // Use per-file metadata if available, otherwise use global values
         const fileDoc = await createFileDocument({
           anagraficaId,
+          folderId: targetFolderId,
           accessoId,
           filePath,
           originalName: file.name,
@@ -225,7 +263,8 @@ export async function uploadFiles({
           size: file.size,
           category,
           tags,
-          expirationDate,
+          documentDate: file.documentDate || null,
+          expirationDate: file.expirationDate || expirationDate,
           structureIds: allowedStructures,
           uploadedByStructure: structureId,
           userUid,
@@ -259,7 +298,7 @@ export async function uploadFiles({
       }
     }
 
-    // 5. INVALIDATE CACHE
+    // 6. INVALIDATE CACHE
     invalidateFilesCache(anagraficaId);
 
     return {
@@ -281,7 +320,9 @@ export async function uploadFiles({
 /**
  * Internal function to fetch files from database
  */
-async function fetchFilesFromDb(anagraficaId, accessoId = null) {
+async function fetchFilesFromDb(anagraficaId, options = {}) {
+  const { accessoId = null, folderId = null } = options;
+
   let query = adminDb.collection('files')
     .where('anagraficaId', '==', anagraficaId)
     .where('deleted', '==', false)
@@ -292,12 +333,18 @@ async function fetchFilesFromDb(anagraficaId, accessoId = null) {
     query = query.where('accessoId', '==', accessoId);
   }
 
+  // Optionally filter by folder
+  if (folderId) {
+    query = query.where('folderId', '==', folderId);
+  }
+
   const snapshot = await query.get();
 
   return snapshot.docs.map(doc => ({
     id: doc.id,
     ...doc.data(),
     // Convert Firestore timestamps to ISO strings
+    dataDocumento: doc.data().dataDocumento?.toDate?.()?.toISOString() || doc.data().dataDocumento,
     dataCreazione: doc.data().dataCreazione?.toDate?.()?.toISOString() || doc.data().dataCreazione,
     dataScadenza: doc.data().dataScadenza?.toDate?.()?.toISOString() || doc.data().dataScadenza,
     createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || doc.data().createdAt,
@@ -307,13 +354,22 @@ async function fetchFilesFromDb(anagraficaId, accessoId = null) {
 }
 
 /**
- * Get files for an anagrafica (with optional accesso filter)
+ * Get files for an anagrafica (with optional filters)
  *
  * @param {string} anagraficaId - Anagrafica ID
- * @param {string} accessoId - Optional: Filter by accesso
+ * @param {Object} options - Optional filters
+ * @param {string} options.accessoId - Filter by accesso
+ * @param {string} options.folderId - Filter by folder
  */
-export async function getFiles(anagraficaId, accessoId = null) {
+export async function getFiles(anagraficaId, options = {}) {
   try {
+    // Support legacy signature: getFiles(anagraficaId, accessoId)
+    if (typeof options === 'string') {
+      options = { accessoId: options };
+    }
+
+    const { accessoId = null, folderId = null } = options;
+
     // 1. AUTHENTICATION
     const { userUid } = await requireUser();
 
@@ -321,9 +377,10 @@ export async function getFiles(anagraficaId, accessoId = null) {
     await getAnagraficaInternal(anagraficaId, userUid);
 
     // 3. GET CACHED FILES
+    const cacheKey = `${anagraficaId}-${accessoId || 'all'}-${folderId || 'all'}`;
     const getCachedFiles = unstable_cache(
-      async () => fetchFilesFromDb(anagraficaId, accessoId),
-      ['files', anagraficaId, accessoId || 'all'],
+      async () => fetchFilesFromDb(anagraficaId, options),
+      ['files', cacheKey],
       {
         tags: [CACHE_TAGS.files(anagraficaId)],
         revalidate: REVALIDATE.files
