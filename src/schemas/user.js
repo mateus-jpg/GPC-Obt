@@ -6,7 +6,7 @@ import { emailSchema, phoneSchema, uidSchema, safeStringSchema } from './common'
  */
 
 // Role options
-const roleSchema = z.enum(['user', 'structure_admin', 'admin']);
+const roleSchema = z.enum(['user', 'structure_admin', 'project_admin', 'admin']);
 
 /**
  * Schema for creating a new user
@@ -19,6 +19,7 @@ export const createUserSchema = z.object({
   displayName: safeStringSchema(100).optional(),
   phone: phoneSchema,
   role: roleSchema.optional().default('user'),
+  projectIds: z.array(z.string().max(100)).max(50).optional().default([]),
   structureIds: z.array(z.string().max(100)).max(50).optional().default([]),
 });
 

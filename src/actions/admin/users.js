@@ -39,6 +39,7 @@ export async function listAllUsers(maxResults = 100, pageToken) {
                     photoURL: user.photoURL,
                     disabled: user.disabled,
                     role: operatorData.role || 'user',
+                    projectIds: operatorData.projectIds || [],
                     structureIds: operatorData.structureIds || [],
                     metadata: {
                         creationTime: user.metadata.creationTime,
@@ -80,7 +81,7 @@ export async function createUser(userData) {
         const { userUid } = await requireUser();
         await verifySuperAdmin({ userUid });
 
-        const { email, password, displayName, phone, role = 'user', structureIds = [] } = userData;
+        const { email, password, displayName, phone, role = 'user', projectIds = [], structureIds = [] } = userData;
 
         // Validate required fields
         if (!email || !password) {
@@ -104,6 +105,7 @@ export async function createUser(userData) {
             displayName: displayName || email.split('@')[0],
             phone: phone || null,
             role,
+            projectIds,
             structureIds,
             createdAt: new Date(),
             createdBy: userUid,
@@ -114,7 +116,7 @@ export async function createUser(userData) {
             action: 'create_user',
             actorUid: userUid,
             targetUid: userRecord.uid,
-            details: { email, role, structureIds }
+            details: { email, role, projectIds, structureIds }
         });
 
         logger.info('Created new user', { actorUid: userUid, newUserUid: userRecord.uid, email });
@@ -169,6 +171,7 @@ export async function getUser(targetUid) {
             // Include operator data
             phone: operatorData.phone || null,
             role: operatorData.role || 'user',
+            projectIds: operatorData.projectIds || [],
             structureIds: operatorData.structureIds || [],
         };
 

@@ -68,7 +68,7 @@ export function NavUser({
               {loading ? <SkeletonUser /> : (
                 <>
                   <Avatar className="h-8 w-8 rounded-lg grayscale">
-                    <AvatarImage src={user.imgUrl} alt={user.displayName} />
+                    <AvatarImage src={user.imgUrl || "" } alt={user.displayName} />
                     <AvatarFallback className="rounded-lg">{user.displayName.charAt(0)}</AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight">

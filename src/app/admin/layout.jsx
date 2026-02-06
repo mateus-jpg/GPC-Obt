@@ -9,6 +9,9 @@ export default function AdminLayout({ children }) {
                     <div className="font-semibold text-lg">Admin Dashboard</div>
                     <nav className="flex items-center gap-4">
                         <Button asChild variant="ghost">
+                            <Link href="/admin/projects">Projects</Link>
+                        </Button>
+                        <Button asChild variant="ghost">
                             <Link href="/admin/users">Users</Link>
                         </Button>
                         <Button asChild variant="ghost">

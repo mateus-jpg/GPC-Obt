@@ -448,9 +448,11 @@ export async function resetStructureCategoriesToDefaults(structureId) {
 /**
  * Creates a new structure.
  * Requires Super Admin privileges.
+ * If projectId is provided, the structure will be associated with that project.
  *
  * @param {Object} data - Structure data
  * @param {string} data.name - Structure name (required)
+ * @param {string} [data.projectId] - Project ID to associate structure with
  * @param {string} [data.email] - Structure email
  * @param {string} [data.address] - Structure address
  * @param {string} [data.city] - Structure city
@@ -462,12 +464,21 @@ export async function createStructure(data) {
     try {
         const { userUid } = await requireUser();
 
-        // Only super admins can create structures
+        // Only super admins can create structures without a project
+        // Project admins can create structures via createStructureInProject
         await verifySuperAdmin({ userUid });
 
         // Validate required fields
         if (!data || !data.name || typeof data.name !== 'string' || !data.name.trim()) {
             return { success: false, error: 'Structure name is required' };
+        }
+
+        // If projectId provided, verify project exists
+        if (data.projectId) {
+            const projectDoc = await collections.projects().doc(data.projectId).get();
+            if (!projectDoc.exists) {
+                return { success: false, error: 'Project not found' };
+            }
         }
 
         const structureData = {
@@ -477,6 +488,7 @@ export async function createStructure(data) {
             city: data.city?.trim() || '',
             phone: data.phone?.trim() || '',
             description: data.description?.trim() || '',
+            projectId: data.projectId || null,
             admins: [],
             accessCategories: JSON.parse(JSON.stringify(DefaultAccessTypes)),
             createdAt: new Date(),
@@ -492,10 +504,10 @@ export async function createStructure(data) {
         await logAdminAction({
             action: 'create_structure',
             actorUid: userUid,
-            details: { structureId: docRef.id, name: structureData.name }
+            details: { structureId: docRef.id, name: structureData.name, projectId: data.projectId || null }
         });
 
-        logger.info('Created new structure', { actorUid: userUid, structureId: docRef.id, name: structureData.name });
+        logger.info('Created new structure', { actorUid: userUid, structureId: docRef.id, name: structureData.name, projectId: data.projectId || null });
 
         return { success: true, structureId: docRef.id };
     } catch (error) {

@@ -165,7 +165,7 @@ const data = {
 export function StructureSidebar({
   ...props
 }) {
-  const { user, loading, availableStructures, currentStructure, setCurrentStructure } = useAuth();
+  const { user, loading, availableStructures, availableProjects, currentStructure, setCurrentStructure } = useAuth();
   const {structureId} = useParams();
 
 
@@ -196,7 +196,7 @@ export function StructureSidebar({
           </SidebarMenuItem>
           <SidebarMenuItem>
 
-            {availableStructures ? <StructureSwitcher structures={availableStructures} selectedStructure={currentStructure} user={user} /> :
+            {availableStructures ? <StructureSwitcher structures={availableStructures} projects={availableProjects} selectedStructure={currentStructure} user={user} /> :
             <Skeleton variant="rectangular" width={210} height={40} className="rounded-lg" />
             }
           </SidebarMenuItem>
