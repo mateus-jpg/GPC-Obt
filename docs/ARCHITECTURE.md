@@ -97,7 +97,12 @@ GPC is a web application for managing personal records (anagrafica) and service 
 
 ### 1. Anagrafica Module
 
-**Purpose**: Manage comprehensive personal records
+**Purpose**: Manage comprehensive personal records with modular data separation.
+
+> [!IMPORTANT]
+> **Modular Data Architecture**: Since February 2026, Anagrafica uses a split data model:
+> - **Global Data** (`anagrafica` collection): Identity fields shared across all structures.
+> - **Structure-Specific Data** (`anagrafica_data` collection): Situation fields owned by each structure.
 
 **Key Files**:
 - [src/actions/anagrafica/anagrafica.js](../src/actions/anagrafica/anagrafica.js) - CRUD operations
@@ -106,18 +111,20 @@ GPC is a web application for managing personal records (anagrafica) and service 
 - [src/utils/anagraficaUtils.js](../src/utils/anagraficaUtils.js) - Utilities
 
 **Operations**:
-- `createAnagrafica()` - Create new record
-- `getAnagrafica()` / `getAnagraficaInternal()` - Read with caching
-- `updateAnagrafica()` / `updateAnagraficaInternal()` - Update with history tracking
+- `createAnagrafica()` - Create new record (splits data automatically)
+- `getAnagrafica()` / `getAnagraficaInternal()` - Read with caching (merges global + structure data)
+- `updateAnagrafica()` / `updateAnagraficaInternal()` - Update with history tracking (routes changes to correct collection)
 - `deleteAnagrafica()` / `deleteAnagraficaInternal()` - Soft delete
 
-**Data Groups**:
+**Global Data Groups** (stored in `anagrafica`):
 1. **anagrafica** - Personal information (name, DOB, contact, address)
-2. **nucleoFamiliare** - Family unit information
-3. **legaleAbitativa** - Legal and housing status
-4. **lavoroFormazione** - Employment and education
-5. **vulnerabilita** - Vulnerabilities and prospects
-6. **referral** - Referral source
+
+**Structure-Specific Data Groups** (stored in `anagrafica_data`):
+1. **nucleoFamiliare** - Family unit information
+2. **legaleAbitativa** - Legal and housing status
+3. **lavoroFormazione** - Employment and education
+4. **vulnerabilita** - Vulnerabilities and prospects
+5. **referral** - Referral source
 
 ### 2. Accessi Module
 
@@ -267,63 +274,40 @@ Project
 
 ### Firestore Collections
 
-#### 1. `anagrafica`
+#### 1. `anagrafica` (Global Identity)
+
+> [!NOTE]
+> This collection now stores **only global identity data**. Situation-specific fields are stored in `anagrafica_data`.
 
 ```javascript
 {
   id: string,                        // Document ID
 
-  // Personal Information
-  firstName: string,
-  lastName: string,
-  dateOfBirth: date,
-  placeOfBirth: string,
-  nationality: string,
-  gender: enum,
-  fiscalCode: string,
-  phone: string,
-  email: string,
-  address: string,
-  city: string,
-  province: string,
-  postalCode: string,
-  country: string,
-
-  // Family Unit
-  familyRole: enum,
-  nucleo: enum,
-  nucleoTipo: string,
-  figli: number,
-
-  // Legal & Housing
-  legalStatus: enum,
-  housingStatus: enum[],
-
-  // Employment & Education
-  jobStatus: enum,
-  educationLevel: enum,
-  educationLevelIT: enum,
-  italianLevel: enum,
-
-  // Vulnerability
-  vulnerabilities: enum[],
-  vulnerabilityNotes: string,
-
-  // Referral
-  referralSource: enum,
+  // Personal Information (Global)
+  anagrafica: {
+    nome: string,
+    cognome: string,
+    sesso: enum,
+    dataDiNascita: date,
+    luogoDiNascita: string,
+    cittadinanza: string[],
+    comuneDiDomicilio: string,
+    telefono: string,
+    email: string
+  },
+  codiceFiscale: string,             // Codice Fiscale
 
   // Access Control
   canBeAccessedBy: string[],         // Structure IDs with access
-  structureIds: string[],            // Legacy field
   registeredByStructure: string,     // Creating structure
 
   // Metadata
   registeredBy: string,              // Creating user UID
   createdAt: date,
   updatedAt: date,
-  updatedBy: string,                 // Last editor UID
-  updatedByMail: string,             // Last editor email
-  updatedByStructure: string,        // Last editing structure
+  updatedBy: string,
+  updatedByMail: string,
+  updatedByStructure: string,
 
   // Soft Delete
   deleted: boolean,
@@ -332,22 +316,71 @@ Project
 }
 ```
 
-**Subcollection**: `anagrafica/{id}/history`
+**Subcollection**: `anagrafica/{id}/history` - Tracks changes to global identity fields.
 ```javascript
 {
   changedAt: date,
-  changedBy: string,                 // User UID
-  changedByMail: string,             // User email
-  changedByStructure: string,        // Structure ID
+  changedBy: string,
+  changedByMail: string,
+  changedByStructure: string,
   changeType: enum,                  // "create" | "update" | "delete"
-  changedGroups: string[],           // Array of changed field groups
-  changes: {                         // Before/after for each group
-    [groupName]: {
-      before: object,
-      after: object
-    }
-  }
+  changedGroups: string[],
+  changes: { [groupName]: { before: object, after: object } }
 }
+```
+
+#### 1b. `anagrafica_data` (Structure-Specific Situation)
+
+> [!IMPORTANT]
+> **New Collection (Feb 2026)**: Stores structure-specific situation data. Each structure that interacts with a person may have its own document here.
+
+```javascript
+{
+  id: string,                        // Document ID
+  anagraficaId: string,              // Reference to parent anagrafica
+  structureId: string,               // Owning structure
+
+  // Family Unit
+  nucleoFamiliare: {
+    nucleo: enum,
+    nucleoTipo: string,
+    figli: number
+  },
+
+  // Legal & Housing
+  legaleAbitativa: {
+    situazioneLegale: enum,
+    situazioneAbitativa: enum[]
+  },
+
+  // Employment & Education
+  lavoroFormazione: {
+    situazioneLavorativa: enum,
+    titoloDiStudioOrigine: enum,
+    titoloDiStudioItalia: enum,
+    conoscenzaItaliano: enum
+  },
+
+  // Vulnerability
+  vulnerabilita: {
+    vulnerabilita: enum[],
+    intenzioneItalia: string,
+    paeseDestinazione: string
+  },
+
+  // Referral
+  referral: {
+    referral: string
+  },
+
+  // Metadata
+  createdAt: date,
+  updatedAt: date,
+  migratedAt: date                   // If created by migration script
+}
+```
+
+**Subcollection**: `anagrafica_data/{id}/history` - Tracks changes to this structure's data.
 ```
 
 #### 2. `accessi`

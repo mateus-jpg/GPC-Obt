@@ -14,6 +14,7 @@ import AccessDialog from "@/components/Anagrafica/AccessDialog/AccessDialog";
 import { getAccessAction } from "@/actions/anagrafica/access";
 import AccessInfo from "@/components/Anagrafica/AccessInfo";
 import { getAnagrafica } from "@/actions/anagrafica/anagrafica";
+import OtherStructuresInfo from "@/components/Anagrafica/OtherStructuresInfo";
 
 async function canUserAccess(anagrafica, userID) {
   const db = admin.firestore();
@@ -45,7 +46,7 @@ export default async function AnagraficaViewPage({ params }) {
   // Use cached server action instead of fetch with no-store
   let anagrafica = null;
   try {
-    const anagraficaJson = await getAnagrafica(id);
+    const anagraficaJson = await getAnagrafica(id, structureId);
     anagrafica = JSON.parse(anagraficaJson);
   } catch (error) {
     console.error('Error fetching anagrafica:', error);
@@ -162,14 +163,23 @@ export default async function AnagraficaViewPage({ params }) {
           <AccessDialog anagraficaId={anagrafica.id} structureId={structureId} />
         </div>
       </div>
+
+
+      {/* Other Info Section */}
       <Otherinfo anagrafica={anagrafica} />
+
+      {/* Cross-Structure Data Display */}
+      {anagrafica.otherStructuresData && anagrafica.otherStructuresData.length > 0 && (
+        <OtherStructuresInfo otherStructuresData={anagrafica.otherStructuresData} />
+      )}
+
       {anagraficaAccesses && (
         <AccessInfo accesses={anagraficaAccesses.accessi} />
       )}
 
       {/* History Section */}
       <div className="mt-6">
-        <HistoryTimeline anagraficaId={anagrafica.id} />
+        <HistoryTimeline anagraficaId={anagrafica.id} structureId={structureId} />
       </div>
     </div>
 

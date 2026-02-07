@@ -52,7 +52,7 @@ export async function listAllUsers(maxResults = 100, pageToken) {
         logger.info('Listed all users', { count: usersWithOperatorData.length, actorUid: userUid });
 
         return {
-            users: usersWithOperatorData,
+            users: serializeFirestoreData(usersWithOperatorData),
             pageToken: result.pageToken,
         };
     } catch (error) {

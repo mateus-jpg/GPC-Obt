@@ -3,6 +3,7 @@
 import { requireUser } from '@/utils/server-auth';
 import { collections, serializeFirestoreDoc } from '@/utils/database';
 import { logger } from '@/utils/logger';
+import { serializeFirestoreData } from '@/lib/utils';
 
 /**
  * Fetches the current user's data, including their operator profile,
@@ -112,7 +113,7 @@ export async function getAuthUserData() {
 
         return {
             success: true,
-            user: fullUser,
+            user: serializeFirestoreData(fullUser),
             structures,
             projects
         };
