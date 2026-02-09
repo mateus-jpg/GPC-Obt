@@ -7,8 +7,9 @@ import { createAccessInternal } from './access';
 import { createHistoryEntry } from './history';
 import { computeGroupChanges } from '@/utils/anagraficaUtils';
 import { CACHE_TAGS, REVALIDATE, invalidateAnagraficaCaches } from '@/lib/cache';
-import { logDataCreate, logDataAccess, logDataUpdate, logDataDelete } from '@/utils/audit';
+import { logDataCreate, logDataAccess, logDataUpdate, logDataDelete, logResourceModification } from '@/utils/audit';
 import { serializeFirestoreData } from '@/lib/utils';
+import { logger } from '@/utils/logger';
 
 const adminDb = admin.firestore();
 
@@ -691,4 +692,237 @@ export async function updateAnagrafica(anagraficaId, body, structureId) {
 export async function deleteAnagrafica(anagraficaId) {
   const { userUid } = await requireUser();
   return await deleteAnagraficaInternal(anagraficaId, userUid);
+}
+
+/**
+ * Share an anagrafica with additional structures.
+ * User must be in the target structure OR the target structure must be in the same project
+ * as the current structure.
+ *
+ * @param {string} anagraficaId - The anagrafica document ID
+ * @param {string} currentStructureId - The current structure ID (for project context)
+ * @param {string[]} targetStructureIds - Array of structure IDs to share with
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function shareAnagraficaWithStructures(anagraficaId, currentStructureId, targetStructureIds) {
+  try {
+    const { userUid } = await requireUser();
+
+    if (!targetStructureIds || targetStructureIds.length === 0) {
+      return { success: false, error: 'No structures selected' };
+    }
+
+    // Get anagrafica to verify access and get current canBeAccessedBy
+    const anagraficaRef = adminDb.collection('anagrafica').doc(anagraficaId);
+    const anagraficaSnap = await anagraficaRef.get();
+
+    if (!anagraficaSnap.exists) {
+      return { success: false, error: 'Anagrafica not found' };
+    }
+
+    const anagraficaData = anagraficaSnap.data();
+
+    if (anagraficaData.deletedAt) {
+      return { success: false, error: 'Anagrafica not found' };
+    }
+
+    // Verify user has access to this anagrafica
+    const allowedStructures = anagraficaData.canBeAccessedBy || [];
+    await verifyUserPermissions({ userUid, allowedStructures });
+
+    // Get user data
+    const operatorDoc = await adminDb.collection('operators').doc(userUid).get();
+    if (!operatorDoc.exists) {
+      return { success: false, error: 'User not found' };
+    }
+
+    const operatorData = operatorDoc.data();
+    const userStructureIds = operatorData.structureIds || [];
+    const isSuperAdmin = operatorData.role === 'admin';
+
+    // Get current structure's project
+    let currentProjectId = null;
+    if (currentStructureId) {
+      const currentStructureDoc = await adminDb.collection('structures').doc(currentStructureId).get();
+      if (currentStructureDoc.exists) {
+        currentProjectId = currentStructureDoc.data().projectId;
+      }
+    }
+
+    // Validate each target structure
+    const validStructureIds = [];
+    for (const structureId of targetStructureIds) {
+      // Skip if already shared
+      if (allowedStructures.includes(structureId)) {
+        continue;
+      }
+
+      // Get target structure
+      const targetStructureDoc = await adminDb.collection('structures').doc(structureId).get();
+      if (!targetStructureDoc.exists) {
+        continue; // Skip invalid structures
+      }
+
+      const targetStructureData = targetStructureDoc.data();
+
+      // Check if user can share with this structure:
+      // 1. User is in the target structure, OR
+      // 2. Target structure is in the same project as current structure, OR
+      // 3. User is super admin
+      const userIsInTargetStructure = userStructureIds.includes(structureId);
+      const sameProject = currentProjectId && targetStructureData.projectId === currentProjectId;
+
+      if (isSuperAdmin || userIsInTargetStructure || sameProject) {
+        validStructureIds.push(structureId);
+      }
+    }
+
+    if (validStructureIds.length === 0) {
+      return {
+        success: false,
+        error: 'No valid structures to share with. You can only share with structures you belong to or structures in the same project.'
+      };
+    }
+
+    // Update the anagrafica with new structures
+    const newCanBeAccessedBy = [...new Set([...allowedStructures, ...validStructureIds])];
+
+    await anagraficaRef.update({
+      canBeAccessedBy: newCanBeAccessedBy,
+      structureIds: newCanBeAccessedBy, // Keep in sync
+      updatedAt: new Date(),
+      updatedBy: userUid
+    });
+
+    // Log the action
+    await logResourceModification({
+      actorUid: userUid,
+      resourceType: 'anagrafica',
+      resourceId: anagraficaId,
+      action: 'share',
+      details: {
+        addedStructures: validStructureIds,
+        totalStructures: newCanBeAccessedBy.length
+      }
+    });
+
+    // Invalidate caches
+    invalidateAnagraficaCaches(anagraficaId, newCanBeAccessedBy);
+
+    logger.info('Shared anagrafica with structures', {
+      anagraficaId,
+      addedStructures: validStructureIds,
+      actorUid: userUid
+    });
+
+    return { success: true, addedCount: validStructureIds.length };
+  } catch (error) {
+    logger.error('Error sharing anagrafica', error, { anagraficaId });
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Get structures available for sharing an anagrafica.
+ * Returns structures the user is in OR structures in the same project.
+ *
+ * @param {string} anagraficaId - The anagrafica document ID
+ * @param {string} currentStructureId - The current structure ID (for project context)
+ * @returns {Promise<{success: boolean, structures?: Array, error?: string}>}
+ */
+export async function getAvailableStructuresForSharing(anagraficaId, currentStructureId) {
+  try {
+    const { userUid } = await requireUser();
+
+    // Get anagrafica to verify access and get current canBeAccessedBy
+    const anagraficaRef = adminDb.collection('anagrafica').doc(anagraficaId);
+    const anagraficaSnap = await anagraficaRef.get();
+
+    if (!anagraficaSnap.exists) {
+      return { success: false, error: 'Anagrafica not found' };
+    }
+
+    const anagraficaData = anagraficaSnap.data();
+    const currentlySharedWith = anagraficaData.canBeAccessedBy || [];
+
+    // Verify user has access
+    await verifyUserPermissions({ userUid, allowedStructures: currentlySharedWith });
+
+    // Get user data
+    const operatorDoc = await adminDb.collection('operators').doc(userUid).get();
+    if (!operatorDoc.exists) {
+      return { success: false, error: 'User not found' };
+    }
+
+    const operatorData = operatorDoc.data();
+    const userStructureIds = operatorData.structureIds || [];
+    const isSuperAdmin = operatorData.role === 'admin';
+
+    // Get current structure's project
+    let currentProjectId = null;
+    let projectStructureIds = [];
+
+    if (currentStructureId) {
+      const currentStructureDoc = await adminDb.collection('structures').doc(currentStructureId).get();
+      if (currentStructureDoc.exists) {
+        currentProjectId = currentStructureDoc.data().projectId;
+
+        // Get all structures in the same project
+        if (currentProjectId) {
+          const projectStructuresSnap = await adminDb.collection('structures')
+            .where('projectId', '==', currentProjectId)
+            .get();
+
+          projectStructureIds = projectStructuresSnap.docs.map(doc => doc.id);
+        }
+      }
+    }
+
+    // Combine user structures and project structures
+    const eligibleStructureIds = [...new Set([...userStructureIds, ...projectStructureIds])];
+
+    // Filter out already shared structures
+    const availableStructureIds = eligibleStructureIds.filter(
+      id => !currentlySharedWith.includes(id)
+    );
+
+    if (availableStructureIds.length === 0) {
+      return { success: true, structures: [] };
+    }
+
+    // Fetch structure details - batch in groups of 30 (Firestore limit)
+    const structures = [];
+    const batchSize = 30;
+
+    for (let i = 0; i < availableStructureIds.length; i += batchSize) {
+      const batch = availableStructureIds.slice(i, i + batchSize);
+      const batchSnap = await adminDb.collection('structures')
+        .where('__name__', 'in', batch)
+        .get();
+
+      for (const doc of batchSnap.docs) {
+        const data = doc.data();
+        structures.push({
+          id: doc.id,
+          name: data.name,
+          city: data.city || '',
+          projectId: data.projectId || null,
+          isUserStructure: userStructureIds.includes(doc.id),
+          isSameProject: projectStructureIds.includes(doc.id)
+        });
+      }
+    }
+
+    // Sort: user's structures first, then project structures
+    structures.sort((a, b) => {
+      if (a.isUserStructure && !b.isUserStructure) return -1;
+      if (!a.isUserStructure && b.isUserStructure) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    return { success: true, structures: serializeFirestoreData(structures) };
+  } catch (error) {
+    logger.error('Error getting available structures for sharing', error, { anagraficaId });
+    return { success: false, error: error.message };
+  }
 }

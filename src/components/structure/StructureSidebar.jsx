@@ -20,7 +20,8 @@ import {
   IconCategoryPlus,
   IconUsers,
   IconBell,
-  IconInfoCircle
+  IconInfoCircle,
+  IconAdjustmentsHeart
 } from "@tabler/icons-react"
 
 import { NavDocuments } from "@/components/nav-documents"
@@ -119,10 +120,15 @@ const data = {
       icon: IconUsersGroup,
     },
     {
-      title: "Gestione Categorie",
+      title: "Gestione Categorie Accessi",
       url: "admin/categories",
       icon: IconCategoryPlus,
     },
+    {
+      title: "Gestione Modulo Anagrafica",
+      url: "admin/form-config",
+      icon: IconAdjustmentsHeart,
+    }
     
   ]
   ,

@@ -15,6 +15,7 @@ import { getAccessAction } from "@/actions/anagrafica/access";
 import AccessInfo from "@/components/Anagrafica/AccessInfo";
 import { getAnagrafica } from "@/actions/anagrafica/anagrafica";
 import OtherStructuresInfo from "@/components/Anagrafica/OtherStructuresInfo";
+import { ShareAnagraficaDialog } from "@/components/Anagrafica/ShareAnagraficaDialog";
 
 async function canUserAccess(anagrafica, userID) {
   const db = admin.firestore();
@@ -159,6 +160,11 @@ export default async function AnagraficaViewPage({ params }) {
               Files & Documents
             </Link>
           </Button>
+          <ShareAnagraficaDialog
+            anagraficaId={anagrafica.id}
+            structureId={structureId}
+            anagraficaName={`${anagrafica.anagrafica?.nome || ''} ${anagrafica.anagrafica?.cognome || ''}`.trim()}
+          />
           {/* <EventDialog anagraficaId={anagrafica.id} structureId={structureId} /> */}
           <AccessDialog anagraficaId={anagrafica.id} structureId={structureId} />
         </div>

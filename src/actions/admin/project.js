@@ -658,6 +658,171 @@ export async function addProjectUserToStructure(structureId, targetUid) {
 }
 
 /**
+ * Adds an existing structure to a project.
+ * Requires the user to be admin of BOTH the structure AND the project.
+ *
+ * @param {string} projectId - ID of the project to add the structure to
+ * @param {string} structureId - ID of the structure to add
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function addExistingStructureToProject(projectId, structureId) {
+    try {
+        const { userUid } = await requireUser();
+
+        // Get the structure to verify it exists and check admin status
+        const structureDoc = await collections.structures().doc(structureId).get();
+        if (!structureDoc.exists) {
+            return { success: false, error: 'Structure not found' };
+        }
+
+        const structureData = structureDoc.data();
+        const structureAdmins = structureData.admins || [];
+
+        // Get the project to verify it exists and check admin status
+        const projectDoc = await collections.projects().doc(projectId).get();
+        if (!projectDoc.exists) {
+            return { success: false, error: 'Project not found' };
+        }
+
+        const projectData = projectDoc.data();
+        const projectAdmins = projectData.admins || [];
+
+        // Get user data to check if super admin
+        const operatorDoc = await collections.operators().doc(userUid).get();
+        const operatorData = operatorDoc.exists ? operatorDoc.data() : {};
+        const isSuperAdmin = operatorData.role === 'admin';
+
+        // User must be admin of BOTH structure and project, OR be super admin
+        const isStructureAdmin = structureAdmins.includes(userUid);
+        const isProjectAdmin = projectAdmins.includes(userUid);
+
+        if (!isSuperAdmin && (!isStructureAdmin || !isProjectAdmin)) {
+            return {
+                success: false,
+                error: 'You must be an admin of both the structure and the project to perform this action'
+            };
+        }
+
+        // Check if structure already belongs to a project
+        if (structureData.projectId) {
+            if (structureData.projectId === projectId) {
+                return { success: false, error: 'Structure is already in this project' };
+            }
+            return {
+                success: false,
+                error: 'Structure already belongs to another project. Remove it from that project first.'
+            };
+        }
+
+        // Update the structure's projectId
+        await collections.structures().doc(structureId).update({
+            projectId: projectId,
+            updatedAt: new Date(),
+            updatedBy: userUid
+        });
+
+        // Log the action
+        await logResourceModification({
+            actorUid: userUid,
+            resourceType: 'structure',
+            resourceId: structureId,
+            action: 'add_to_project',
+            details: { projectId, structureName: structureData.name }
+        });
+
+        logger.info('Added existing structure to project', {
+            actorUid: userUid,
+            structureId,
+            projectId,
+            structureName: structureData.name
+        });
+
+        return { success: true };
+    } catch (error) {
+        logger.error('Error adding existing structure to project', error, { projectId, structureId });
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Gets structures that can be added to a project.
+ * Returns structures where the user is an admin AND that don't already belong to a project.
+ *
+ * @param {string} projectId - ID of the project
+ * @returns {Promise<{success: boolean, structures?: Array, error?: string}>}
+ */
+export async function getAvailableStructuresForProject(projectId) {
+    try {
+        const { userUid } = await requireUser();
+
+        // Verify user is admin of this project
+        await verifyProjectAdmin({ userUid, projectId });
+
+        // Get user data to check if super admin
+        const operatorDoc = await collections.operators().doc(userUid).get();
+        const operatorData = operatorDoc.exists ? operatorDoc.data() : {};
+        const isSuperAdmin = operatorData.role === 'admin';
+
+        // Get structures without a projectId
+        const structuresQuery = await collections.structures()
+            .where('projectId', '==', null)
+            .get();
+
+        // Also get structures where projectId field doesn't exist
+        const allStructuresSnap = await collections.structures().get();
+
+        const availableStructures = [];
+        const seenIds = new Set();
+
+        // Process structures without projectId
+        for (const doc of structuresQuery.docs) {
+            const data = doc.data();
+            const structureAdmins = data.admins || [];
+
+            // User must be admin of the structure OR be super admin
+            if (isSuperAdmin || structureAdmins.includes(userUid)) {
+                availableStructures.push({
+                    id: doc.id,
+                    name: data.name,
+                    description: data.description || '',
+                    city: data.city || ''
+                });
+                seenIds.add(doc.id);
+            }
+        }
+
+        // Check for structures where projectId is undefined
+        for (const doc of allStructuresSnap.docs) {
+            if (seenIds.has(doc.id)) continue;
+
+            const data = doc.data();
+            if (data.projectId === undefined || data.projectId === '') {
+                const structureAdmins = data.admins || [];
+
+                if (isSuperAdmin || structureAdmins.includes(userUid)) {
+                    availableStructures.push({
+                        id: doc.id,
+                        name: data.name,
+                        description: data.description || '',
+                        city: data.city || ''
+                    });
+                }
+            }
+        }
+
+        logger.info('Retrieved available structures for project', {
+            projectId,
+            structureCount: availableStructures.length
+        });
+
+        return { success: true, structures: serializeFirestoreData(availableStructures) };
+    } catch (error) {
+        logger.error('Error fetching available structures for project', error, { projectId });
+        return { success: false, error: error.message };
+    }
+}
+
+/**
  * Gets project users who are not yet members of a specific structure.
  * Useful for Structure Admins to see who they can add.
  *

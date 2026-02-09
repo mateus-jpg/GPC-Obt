@@ -49,7 +49,10 @@ export default async function StructureAdminPage({ params }) {
                     <h1 className="text-3xl font-bold tracking-tight">Structure Administration</h1>
                     <p className="text-muted-foreground">Manage settings and information for this structure.</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
+                    <Button asChild variant="outline">
+                        <Link href={`/${structureId}/admin/form-config`}>Configurazione Modulo</Link>
+                    </Button>
                     <Button asChild variant="outline">
                         <Link href={`/${structureId}/admin/categories`}>Gestione Categorie</Link>
                     </Button>
