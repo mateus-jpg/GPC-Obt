@@ -10,8 +10,7 @@
         "firebase-debug.*.log",
         "*.local"
       ],
-      "predeploy": [
-      ]
+      "predeploy": []
     }
   ],
   "firestore": {
@@ -19,5 +18,8 @@
   },
   "appHosting": {
     "source": "."
+  },
+  "storage": {
+    "rules": "storage.rules"
   }
 }

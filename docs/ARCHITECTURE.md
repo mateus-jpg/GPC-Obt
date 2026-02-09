@@ -1,7 +1,7 @@
 # GPC (Gestione Presenze e Contatti) - Architecture Documentation
 
-**Last Updated:** February 5, 2026
-**Version:** 1.0
+**Last Updated:** February 6, 2026
+**Version:** 1.1
 
 ---
 
@@ -30,7 +30,8 @@ GPC is a web application for managing personal records (anagrafica) and service 
 
 - **Personal Records Management** (Anagrafica): Comprehensive individual profiles with personal, family, legal, employment, education, and vulnerability information
 - **Service Access Tracking** (Accessi): Track services and interventions provided to individuals
-- **Multi-Tenant Architecture**: Structure-based permissions with role-based access control
+- **Project-Based Organization**: Hierarchical organization with Projects containing Structures
+- **Multi-Tenant Architecture**: Project and structure-based permissions with role-based access control
 - **Audit Logging**: Complete audit trail for all data operations
 - **History Tracking**: Detailed change history for anagrafica records
 - **File Management**: Secure file upload and access with validation
@@ -96,7 +97,12 @@ GPC is a web application for managing personal records (anagrafica) and service 
 
 ### 1. Anagrafica Module
 
-**Purpose**: Manage comprehensive personal records
+**Purpose**: Manage comprehensive personal records with modular data separation.
+
+> [!IMPORTANT]
+> **Modular Data Architecture**: Since February 2026, Anagrafica uses a split data model:
+> - **Global Data** (`anagrafica` collection): Identity fields shared across all structures.
+> - **Structure-Specific Data** (`anagrafica_data` collection): Situation fields owned by each structure.
 
 **Key Files**:
 - [src/actions/anagrafica/anagrafica.js](../src/actions/anagrafica/anagrafica.js) - CRUD operations
@@ -105,18 +111,20 @@ GPC is a web application for managing personal records (anagrafica) and service 
 - [src/utils/anagraficaUtils.js](../src/utils/anagraficaUtils.js) - Utilities
 
 **Operations**:
-- `createAnagrafica()` - Create new record
-- `getAnagrafica()` / `getAnagraficaInternal()` - Read with caching
-- `updateAnagrafica()` / `updateAnagraficaInternal()` - Update with history tracking
+- `createAnagrafica()` - Create new record (splits data automatically)
+- `getAnagrafica()` / `getAnagraficaInternal()` - Read with caching (merges global + structure data)
+- `updateAnagrafica()` / `updateAnagraficaInternal()` - Update with history tracking (routes changes to correct collection)
 - `deleteAnagrafica()` / `deleteAnagraficaInternal()` - Soft delete
 
-**Data Groups**:
+**Global Data Groups** (stored in `anagrafica`):
 1. **anagrafica** - Personal information (name, DOB, contact, address)
-2. **nucleoFamiliare** - Family unit information
-3. **legaleAbitativa** - Legal and housing status
-4. **lavoroFormazione** - Employment and education
-5. **vulnerabilita** - Vulnerabilities and prospects
-6. **referral** - Referral source
+
+**Structure-Specific Data Groups** (stored in `anagrafica_data`):
+1. **nucleoFamiliare** - Family unit information
+2. **legaleAbitativa** - Legal and housing status
+3. **lavoroFormazione** - Employment and education
+4. **vulnerabilita** - Vulnerabilities and prospects
+5. **referral** - Referral source
 
 ### 2. Accessi Module
 
@@ -153,17 +161,46 @@ GPC is a web application for managing personal records (anagrafica) and service 
 - **Users**: Legacy/fallback users in the `users` collection
 - **Super Admins**: Users with `role: 'admin'` have global access
 
-### 4. Structure Management Module
+### 4. Project Management Module
 
-**Purpose**: Manage organizational structures (multi-tenant)
+**Purpose**: Manage projects that contain multiple structures (organizational hierarchy)
+
+**Key Files**:
+- [src/actions/admin/project.js](../src/actions/admin/project.js) - Project operations
+- [src/schemas/project.js](../src/schemas/project.js) - Validation schemas
+
+**Operations**:
+- `createProject()` - Create new project (Super Admin only)
+- `getProject()` / `updateProject()` - Read/update project
+- `listProjects()` - List projects based on user access
+- `getUsersByProject()` - Get project members
+- `addUserToProject()` / `removeUserFromProject()` - Manage project membership
+- `toggleProjectAdminStatus()` - Promote/demote project admins
+- `getStructuresByProject()` - List structures in a project
+- `createStructureInProject()` - Create structure within a project
+- `addProjectUserToStructure()` - Add project member to structure
+
+**Hierarchy**:
+```
+Project
+├── Project Admin (can manage project users and structures)
+└── Structure
+    ├── Structure Admin (can add project users to structure)
+    └── Anagrafica/Categories
+```
+
+### 5. Structure Management Module
+
+**Purpose**: Manage organizational structures within projects (multi-tenant)
 
 **Key Files**:
 - [src/actions/admin/structure.js](../src/actions/admin/structure.js) - Structure operations
 
 **Features**:
-- Hierarchical organization support
+- Project-based organization (`projectId` field)
 - User-structure associations
 - Structure-based data access control
+- Custom access categories per structure
 
 ### 5. File Management Module
 
@@ -237,63 +274,40 @@ GPC is a web application for managing personal records (anagrafica) and service 
 
 ### Firestore Collections
 
-#### 1. `anagrafica`
+#### 1. `anagrafica` (Global Identity)
+
+> [!NOTE]
+> This collection now stores **only global identity data**. Situation-specific fields are stored in `anagrafica_data`.
 
 ```javascript
 {
   id: string,                        // Document ID
 
-  // Personal Information
-  firstName: string,
-  lastName: string,
-  dateOfBirth: date,
-  placeOfBirth: string,
-  nationality: string,
-  gender: enum,
-  fiscalCode: string,
-  phone: string,
-  email: string,
-  address: string,
-  city: string,
-  province: string,
-  postalCode: string,
-  country: string,
-
-  // Family Unit
-  familyRole: enum,
-  nucleo: enum,
-  nucleoTipo: string,
-  figli: number,
-
-  // Legal & Housing
-  legalStatus: enum,
-  housingStatus: enum[],
-
-  // Employment & Education
-  jobStatus: enum,
-  educationLevel: enum,
-  educationLevelIT: enum,
-  italianLevel: enum,
-
-  // Vulnerability
-  vulnerabilities: enum[],
-  vulnerabilityNotes: string,
-
-  // Referral
-  referralSource: enum,
+  // Personal Information (Global)
+  anagrafica: {
+    nome: string,
+    cognome: string,
+    sesso: enum,
+    dataDiNascita: date,
+    luogoDiNascita: string,
+    cittadinanza: string[],
+    comuneDiDomicilio: string,
+    telefono: string,
+    email: string
+  },
+  codiceFiscale: string,             // Codice Fiscale
 
   // Access Control
   canBeAccessedBy: string[],         // Structure IDs with access
-  structureIds: string[],            // Legacy field
   registeredByStructure: string,     // Creating structure
 
   // Metadata
   registeredBy: string,              // Creating user UID
   createdAt: date,
   updatedAt: date,
-  updatedBy: string,                 // Last editor UID
-  updatedByMail: string,             // Last editor email
-  updatedByStructure: string,        // Last editing structure
+  updatedBy: string,
+  updatedByMail: string,
+  updatedByStructure: string,
 
   // Soft Delete
   deleted: boolean,
@@ -302,22 +316,71 @@ GPC is a web application for managing personal records (anagrafica) and service 
 }
 ```
 
-**Subcollection**: `anagrafica/{id}/history`
+**Subcollection**: `anagrafica/{id}/history` - Tracks changes to global identity fields.
 ```javascript
 {
   changedAt: date,
-  changedBy: string,                 // User UID
-  changedByMail: string,             // User email
-  changedByStructure: string,        // Structure ID
+  changedBy: string,
+  changedByMail: string,
+  changedByStructure: string,
   changeType: enum,                  // "create" | "update" | "delete"
-  changedGroups: string[],           // Array of changed field groups
-  changes: {                         // Before/after for each group
-    [groupName]: {
-      before: object,
-      after: object
-    }
-  }
+  changedGroups: string[],
+  changes: { [groupName]: { before: object, after: object } }
 }
+```
+
+#### 1b. `anagrafica_data` (Structure-Specific Situation)
+
+> [!IMPORTANT]
+> **New Collection (Feb 2026)**: Stores structure-specific situation data. Each structure that interacts with a person may have its own document here.
+
+```javascript
+{
+  id: string,                        // Document ID
+  anagraficaId: string,              // Reference to parent anagrafica
+  structureId: string,               // Owning structure
+
+  // Family Unit
+  nucleoFamiliare: {
+    nucleo: enum,
+    nucleoTipo: string,
+    figli: number
+  },
+
+  // Legal & Housing
+  legaleAbitativa: {
+    situazioneLegale: enum,
+    situazioneAbitativa: enum[]
+  },
+
+  // Employment & Education
+  lavoroFormazione: {
+    situazioneLavorativa: enum,
+    titoloDiStudioOrigine: enum,
+    titoloDiStudioItalia: enum,
+    conoscenzaItaliano: enum
+  },
+
+  // Vulnerability
+  vulnerabilita: {
+    vulnerabilita: enum[],
+    intenzioneItalia: string,
+    paeseDestinazione: string
+  },
+
+  // Referral
+  referral: {
+    referral: string
+  },
+
+  // Metadata
+  createdAt: date,
+  updatedAt: date,
+  migratedAt: date                   // If created by migration script
+}
+```
+
+**Subcollection**: `anagrafica_data/{id}/history` - Tracks changes to this structure's data.
 ```
 
 #### 2. `accessi`
@@ -426,22 +489,38 @@ GPC is a web application for managing personal records (anagrafica) and service 
 }
 ```
 
-#### 5. `operators`
+#### 5. `projects`
+
+```javascript
+{
+  id: string,                        // Document ID
+  name: string,                      // Project name
+  description: string,               // Project description
+  admins: string[],                  // UIDs of project administrators
+  createdAt: date,
+  createdBy: string,                 // Creating user UID
+  updatedAt: date,
+  updatedBy: string
+}
+```
+
+#### 6. `operators`
 
 ```javascript
 {
   uid: string,                       // User UID (from Firebase Auth)
   email: string,
   displayName: string,
-  role: string,                      // "admin" | "operator" | "viewer"
-  structures: string[],              // Associated structure IDs
+  role: string,                      // "admin" | "project_admin" | "structure_admin" | "user"
+  projectIds: string[],              // Associated project IDs
+  structureIds: string[],            // Associated structure IDs
   createdAt: date,
   updatedAt: date,
   active: boolean
 }
 ```
 
-#### 6. `users`
+#### 7. `users`
 
 ```javascript
 {
@@ -452,17 +531,21 @@ GPC is a web application for managing personal records (anagrafica) and service 
 }
 ```
 
-#### 7. `structures`
+#### 8. `structures`
 
 ```javascript
 {
   id: string,                        // Document ID
   name: string,
   description: string,
+  projectId: string,                 // Parent project ID
+  admins: string[],                  // UIDs of structure administrators
+  accessCategories: Array,           // Custom access categories
   active: boolean,
   createdAt: date,
+  createdBy: string,
   updatedAt: date,
-  // Additional structure fields...
+  updatedBy: string
 }
 ```
 
@@ -525,12 +608,22 @@ await verifyUserPermissions({
 }
 ```
 
-#### 3. Structure Admin Check
+#### 3. Project Admin Check
+```javascript
+await verifyProjectAdmin({ userUid, projectId });
+```
+
+#### 4. Project Membership Check
+```javascript
+await verifyProjectMembership({ userUid, projectId });
+```
+
+#### 5. Structure Admin Check
 ```javascript
 await verifyStructureAdmin({ userUid, structureId });
 ```
 
-#### 4. Super Admin Check
+#### 6. Super Admin Check
 ```javascript
 await verifySuperAdmin({ userUid });
 ```
@@ -538,20 +631,29 @@ await verifySuperAdmin({ userUid });
 ### Permission Levels
 
 1. **Super Admin** (`role: 'admin'`)
-   - Bypass all structure checks
+   - Bypass all project and structure checks
    - Access to all data
-   - Admin operations
+   - Can create projects
+   - Full admin operations
 
-2. **Structure Admin**
-   - Manage users within structures
+2. **Project Admin** (`role: 'project_admin'` or in project's `admins` array)
+   - Manage users within assigned projects
+   - Create structures within their projects
+   - Add project users to any structure in their project
+   - Full access to project data
+
+3. **Structure Admin** (in structure's `admins` array)
+   - Manage users within assigned structures
+   - Can only add users who are already project members
+   - Manage categories for their structure
    - Full access to structure data
 
-3. **Operator**
+4. **Operator** (`role: 'user'`)
    - Access to assigned structures
-   - Create/read/update permissions
+   - Create/read/update permissions for anagrafica
    - Limited delete permissions
 
-4. **Viewer**
+5. **Viewer**
    - Read-only access
    - No modifications allowed
 
@@ -1164,6 +1266,7 @@ gpc/
 ├── src/
 │   ├── actions/                    # Server Actions (data layer)
 │   │   ├── admin/
+│   │   │   ├── project.js         # Project management
 │   │   │   ├── structure.js       # Structure management
 │   │   │   └── users.js           # User management
 │   │   └── anagrafica/
@@ -1228,7 +1331,9 @@ gpc/
 | **File Management** | `src/actions/files/files.js` | File upload, download, management |
 | **Validation** | `src/schemas/anagrafica.js` | Zod validation schemas |
 | **User Management** | `src/actions/admin/users.js` | User CRUD operations |
+| **Project Management** | `src/actions/admin/project.js` | Project operations |
 | **Structure Management** | `src/actions/admin/structure.js` | Structure operations |
+| **Project Schema** | `src/schemas/project.js` | Project validation |
 
 ---
 
@@ -1350,6 +1455,7 @@ For questions or issues:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1 | 2026-02-06 | Added Project hierarchy (Projects > Structures), new roles (project_admin), project management module |
 | 1.0 | 2026-02-05 | Initial comprehensive architecture documentation |
 
 ---

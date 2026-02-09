@@ -41,16 +41,21 @@ export function useFolderTree(anagraficaId) {
 
 /**
  * Fetch contents of a specific folder
- * @param {string} folderId - Folder ID
+ * @param {string} folderId - Folder ID (null for root)
+ * @param {string} anagraficaId - Anagrafica ID (required when folderId is null)
  * @param {boolean} includeSubfolders - Whether to include subfolders
  * @returns {Object} SWR response with folder contents
  */
-export function useFolderContents(folderId, includeSubfolders = true) {
+export function useFolderContents(folderId, anagraficaId = null, includeSubfolders = true) {
+  // Use 'root' as key when folderId is null to enable root fetching
+  const key = ['folder-contents', folderId || 'root', anagraficaId, includeSubfolders];
+
   const { data, error, isLoading, mutate } = useSWR(
-    folderId ? ['folder-contents', folderId, includeSubfolders] : null,
-    async ([_, id, includeSub]) => {
+    key,
+    async ([_, id, anagId, includeSub]) => {
       const result = await getFolderContents({
-        folderId: id,
+        folderId: id === 'root' ? null : id,
+        anagraficaId: anagId,
         includeSubfolders: includeSub,
       });
       if (result.error) {

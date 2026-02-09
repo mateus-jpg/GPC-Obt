@@ -58,7 +58,7 @@ export default function FilesPage() {
     breadcrumbs,
     isLoading: isLoadingContents,
     mutate: mutateContents,
-  } = useFolderContents(currentFolderId);
+  } = useFolderContents(currentFolderId, anagraficaId);
 
   // Setup folder operations
   const folderOps = useFolderOperations(anagraficaId, structureId, () => {
@@ -211,7 +211,11 @@ export default function FilesPage() {
                   <FileGridView
                     files={files}
                     subfolders={subfolders}
+                    currentFolder={currentFolder}
                     onFolderOpen={handleFolderSelect}
+                    onFileMove={(fileId, targetFolderId) => {
+                      fileOps.moveFile(fileId, targetFolderId);
+                    }}
                     onFileDelete={(file) => {
                       if (
                         confirm(
@@ -220,6 +224,9 @@ export default function FilesPage() {
                       ) {
                         fileOps.removeFile(file.id);
                       }
+                    }}
+                    onFolderMove={(folderId, targetFolderId) => {
+                      folderOps.move(folderId, targetFolderId);
                     }}
                     onFolderDelete={(folder) => {
                       const hasContents =

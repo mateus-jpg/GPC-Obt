@@ -28,7 +28,7 @@ export async function requireUser() {
  * @returns {Promise<{operatorData: Object, userStructures: string[], isSuperAdmin: boolean}>}
  * @throws {Error} If user not found or lacks required permissions
  */
-export async function verifyUserPermissions({ userUid, structureId, allowedStructures = [] }) {
+export async function verifyUserPermissions({ userUid, structureId, projectId, allowedStructures = [] }) {
     const userDoc = await getUserDocument(userUid);
 
     if (!userDoc.exists) {
@@ -38,25 +38,33 @@ export async function verifyUserPermissions({ userUid, structureId, allowedStruc
 
     const operatorData = userDoc.data;
 
-    // Super Admin bypass: if user is a global admin, grant access to all structures
+    // Super Admin bypass: if user is a global admin, grant access to all structures/projects
     if (operatorData.role === 'admin') {
         logger.debug('Super admin bypassing structure checks', { userUid });
         return {
             operatorData,
             userStructures: [],
+            userProjects: [],
             isSuperAdmin: true
         };
     }
 
     const userStructures = operatorData.structureIds || operatorData.structureId || [];
+    const userProjects = operatorData.projectIds || [];
 
-    // 1. If structureId is provided, check if user has access to this specific structure
+    // 1. If projectId is provided, check if user has access to this specific project
+    if (projectId && !userProjects.includes(projectId)) {
+        logger.warn('User lacks access to project', { userUid, projectId, userProjects });
+        throw new Error(`Forbidden: User does not have access to project ${projectId}`);
+    }
+
+    // 2. If structureId is provided, check if user has access to this specific structure
     if (structureId && !userStructures.includes(structureId)) {
         logger.warn('User lacks access to structure', { userUid, structureId, userStructures });
         throw new Error(`Forbidden: User does not have access to structure ${structureId}`);
     }
 
-    // 2. If allowedStructures is provided (e.g. from an existing Anagrafica), check intersection
+    // 3. If allowedStructures is provided (e.g. from an existing Anagrafica), check intersection
     if (allowedStructures.length > 0) {
         const hasAccess = arraysIntersect(allowedStructures, userStructures);
         if (!hasAccess) {
@@ -68,6 +76,7 @@ export async function verifyUserPermissions({ userUid, structureId, allowedStruc
     return {
         operatorData,
         userStructures,
+        userProjects,
         isSuperAdmin: false
     };
 }
@@ -144,4 +153,86 @@ export async function verifySuperAdmin({ userUid }) {
 
     logger.warn('User is not super admin', { userUid, role: data.role });
     throw new Error('Forbidden: User is not a Super Admin');
+}
+
+/**
+ * Verifies if a user is an admin of a specific project.
+ * Super admins automatically pass this check.
+ *
+ * @param {Object} params - Verification parameters
+ * @param {string} params.userUid - User's UID
+ * @param {string} params.projectId - Project ID to check admin status for
+ * @returns {Promise<boolean>} True if user is admin
+ * @throws {Error} If user is not an admin of the project
+ */
+export async function verifyProjectAdmin({ userUid, projectId }) {
+    const userDoc = await getUserDocument(userUid);
+
+    if (!userDoc.exists) {
+        logger.warn('User not found during project admin check', { userUid });
+        throw new Error("User not found");
+    }
+
+    const operatorData = userDoc.data;
+
+    // Check if user is a global admin
+    if (operatorData.role === 'admin') {
+        logger.debug('Super admin accessing project admin function', { userUid, projectId });
+        return true;
+    }
+
+    // Check project specific admin list
+    const { collections } = await import('./database');
+    const projectDoc = await collections.projects().doc(projectId).get();
+
+    if (!projectDoc.exists) {
+        logger.warn('Project not found', { projectId });
+        throw new Error("Project not found");
+    }
+
+    const projectData = projectDoc.data();
+    const admins = projectData.admins || [];
+
+    if (admins.includes(userUid)) {
+        return true;
+    }
+
+    logger.warn('User is not project admin', { userUid, projectId });
+    throw new Error("Forbidden: User is not an admin of this project");
+}
+
+/**
+ * Verifies if a user is a member of a specific project.
+ * Super admins automatically pass this check.
+ *
+ * @param {Object} params - Verification parameters
+ * @param {string} params.userUid - User's UID
+ * @param {string} params.projectId - Project ID to check membership for
+ * @returns {Promise<boolean>} True if user is a member
+ * @throws {Error} If user is not a member of the project
+ */
+export async function verifyProjectMembership({ userUid, projectId }) {
+    const userDoc = await getUserDocument(userUid);
+
+    if (!userDoc.exists) {
+        logger.warn('User not found during project membership check', { userUid });
+        throw new Error("User not found");
+    }
+
+    const operatorData = userDoc.data;
+
+    // Super Admin bypass
+    if (operatorData.role === 'admin') {
+        logger.debug('Super admin bypassing project membership check', { userUid, projectId });
+        return true;
+    }
+
+    const userProjects = operatorData.projectIds || [];
+
+    if (userProjects.includes(projectId)) {
+        return true;
+    }
+
+    logger.warn('User is not a member of project', { userUid, projectId });
+    throw new Error("Forbidden: User is not a member of this project");
 }

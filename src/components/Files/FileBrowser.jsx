@@ -44,7 +44,7 @@ export default function FileBrowser({ anagraficaId, structureId }) {
     breadcrumbs,
     isLoading: isLoadingContents,
     mutate: mutateContents,
-  } = useFolderContents(currentFolderId);
+  } = useFolderContents(currentFolderId, anagraficaId);
 
   // Setup folder operations
   const folderOps = useFolderOperations(anagraficaId, structureId, () => {

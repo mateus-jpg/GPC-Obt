@@ -116,7 +116,7 @@ const data = {
 export function PortalSideBar({
   ...props
 }) {
-  const { user, loading, availableStructures, setCurrentStructure, currentStructure } = useAuth();
+  const { user, loading, availableStructures, availableProjects, setCurrentStructure, currentStructure } = useAuth();
 
   React.useEffect(() => {
     if (availableStructures && availableStructures.length === 1) {
@@ -142,7 +142,7 @@ export function PortalSideBar({
             </SidebarMenuButton>
           </SidebarMenuItem>
            <SidebarMenuItem>
-            {availableStructures ? <StructureSwitcher structures={availableStructures} selectedStructure={currentStructure} /> : 
+            {availableStructures ? <StructureSwitcher structures={availableStructures} projects={availableProjects} selectedStructure={currentStructure} user={user} /> : 
             <Skeleton variant="rectangular" width={210} height={40} className="rounded-lg" />
             }
           </SidebarMenuItem>

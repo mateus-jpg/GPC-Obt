@@ -13,6 +13,12 @@ Quick reference for common operations and patterns in the GPC application.
 const { userUid, headers } = await requireUser();
 const userEmail = headers.get('x-user-email');
 
+// Check permissions for a project
+await verifyUserPermissions({
+  userUid,
+  projectId: 'project-123'
+});
+
 // Check permissions for a structure
 await verifyUserPermissions({
   userUid,
@@ -27,6 +33,12 @@ await verifyUserPermissions({
 
 // Check if user is super admin
 const { isSuperAdmin } = await verifyUserPermissions({ userUid });
+
+// Check if user is project admin
+await verifyProjectAdmin({ userUid, projectId });
+
+// Check if user is project member
+await verifyProjectMembership({ userUid, projectId });
 
 // Check if user is structure admin
 await verifyStructureAdmin({ userUid, structureId });

@@ -76,7 +76,6 @@ export const EDUCATION_LEVEL_IT_OPTIONS = ["Nessun titolo", "Licenza media in It
 export const ITALIAN_LEVEL_OPTIONS = ["La persona non parla italiano", "Base", "Intermedio", "Avanzato", "Madrelingua", "Altro"];
 
 export const VULNERABILITY_OPTIONS = [
-    "Nessuna vulnerabilità emersa",
     "Minore non accompagnato",
     "Donna incinta",
     "Vulnerabilità psicologica e/o psichiatrica",
