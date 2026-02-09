@@ -1,116 +1,143 @@
 'use server';
 
 import admin from '@/lib/firebase/firebaseAdmin';
-import { requireUser } from '@/utils/server-auth';
-import { computeGroupChanges } from '@/utils/anagraficaUtils';
+import { requireUser, verifySuperAdmin } from '@/utils/server-auth';
 
 const adminDb = admin.firestore();
 
+// Personal fields that should be nested under 'anagrafica' key
+const PERSONAL_FIELDS = [
+    'nome', 'cognome', 'sesso', 'dataDiNascita', 'luogoDiNascita',
+    'codiceFiscale', 'cittadinanza', 'comuneDiDomicilio', 'telefono', 'email',
+];
+
+// Structure-specific fields that should live in anagrafica_data, not in anagrafica
+const STRUCTURE_FIELDS = [
+    'nucleoFamiliare',
+    'legaleAbitativa',
+    'lavoroFormazione',
+    'vulnerabilita',
+    'referral',
+    'notes',
+];
+
 /**
- * Migration Script: Split Anagrafica Data
- * Iterates through all anagrafica documents and creates corresponding structure-specific documents.
- * 
- * Usage: Call this action from a secure admin endpoint or run manually.
+ * Migration Server Action: Split Anagrafica Data
+ *
+ * 1. Nests flat personal fields (nome, cognome, etc.) under an 'anagrafica' key
+ * 2. Moves structure-specific groups (nucleoFamiliare, legaleAbitativa, etc.)
+ *    from the 'anagrafica' collection into per-structure 'anagrafica_data' documents
+ * 3. Removes old flat fields from the original anagrafica doc
+ *
+ * @param {number} limit - Max documents to process (default 100)
+ * @param {boolean} dryRun - If true, only preview changes (default true)
  */
 export async function migrateAnagraficaStructure(limit = 100, dryRun = true) {
     try {
         const { userUid } = await requireUser();
-        // Ideally check for SUPER ADMIN role here.
+        await verifySuperAdmin(userUid);
 
-        console.log(`[MIGRATION] Starting migration execution. DryRun: ${dryRun}`);
+        console.log(`[MIGRATION] Starting. DryRun: ${dryRun}, Limit: ${limit}`);
 
         const snapshot = await adminDb.collection('anagrafica')
-            .where('deleted', '==', false) // Only active ones
-            // .where('migrationStatus', '!=', 'completed') // Uncomment if we track status
             .limit(limit)
             .get();
 
         if (snapshot.empty) {
-            return { success: true, message: "No documents found to migrate." };
+            return { success: true, message: 'No documents found to migrate.', stats: { total: 0 } };
         }
 
-        let stats = {
-            processed: 0,
-            migrated: 0,
-            skipped: 0,
-            errors: 0
+        const stats = {
+            total: snapshot.size,
+            needsMigration: 0,
+            alreadyMigrated: 0,
+            personalFieldsNested: 0,
+            dataDocsCreated: 0,
+            dataDocsSkipped: 0,
+            anagraficaCleaned: 0,
+            errors: 0,
         };
-
-        const batchSize = 500; // Firestore batch limit required if using batch, but we might do individual due to complexity
-
-        // Structure fields to move
-        const STRUCTURE_FIELDS = [
-            'nucleoFamiliare',
-            'legaleAbitativa',
-            'lavoroFormazione',
-            'vulnerabilita',
-            'referral',
-            'notes', // assuming it exists
-            // 'status' might be new
-        ];
 
         for (const doc of snapshot.docs) {
             try {
                 const data = doc.data();
                 const anagraficaId = doc.id;
-                const structures = data.canBeAccessedBy || [];
 
-                if (structures.length === 0) {
-                    stats.skipped++;
+                // Detect flat personal fields at root (needs nesting under 'anagrafica' key)
+                const flatPersonalFields = PERSONAL_FIELDS.filter(f => data[f] !== undefined);
+                // Detect structure fields at root (needs moving to anagrafica_data)
+                const structureFieldsPresent = STRUCTURE_FIELDS.filter(f => data[f] !== undefined);
+
+                if (flatPersonalFields.length === 0 && structureFieldsPresent.length === 0) {
+                    stats.alreadyMigrated++;
                     continue;
                 }
 
-                // Prepare structure data payload
-                const structurePayload = {};
-                let hasStructureData = false;
+                stats.needsMigration++;
+                const structures = data.canBeAccessedBy || data.structureIds || [];
 
-                STRUCTURE_FIELDS.forEach(field => {
-                    if (data[field] !== undefined) {
-                        structurePayload[field] = data[field];
-                        hasStructureData = true;
+                // --- Step A: Nest personal fields under 'anagrafica' key ---
+                if (flatPersonalFields.length > 0) {
+                    const anagraficaNested = data.anagrafica || {};
+                    for (const field of flatPersonalFields) {
+                        anagraficaNested[field] = data[field];
                     }
-                });
 
-                // If no structure data to migrate (pure identity?), just skip creation or create empty?
-                // Better to create empty context to avoid "missing details" UI states if app expects them.
-                // But if `hasStructureData` is false, it's just name/surname. 
-                // Let's create it anyway so they have a state record.
+                    if (!dryRun) {
+                        const updatePayload = { anagrafica: anagraficaNested };
+                        for (const field of flatPersonalFields) {
+                            updatePayload[field] = admin.firestore.FieldValue.delete();
+                        }
+                        await doc.ref.update(updatePayload);
+                    }
+                    stats.personalFieldsNested++;
+                }
 
-                if (!dryRun) {
-                    // For each structure that has access, create a data record
-                    // Since currently all structures see the SAME data, we copy the SAME data to all of them.
+                // --- Step B: Move structure fields to anagrafica_data ---
+                if (structureFieldsPresent.length > 0) {
+                    const structurePayload = {};
+                    for (const field of structureFieldsPresent) {
+                        structurePayload[field] = data[field];
+                    }
 
-                    await Promise.all(structures.map(async (structureId) => {
-                        // Check if already exists
-                        const q = await adminDb.collection('anagrafica_data')
+                    for (const structureId of structures) {
+                        const existing = await adminDb.collection('anagrafica_data')
                             .where('anagraficaId', '==', anagraficaId)
                             .where('structureId', '==', structureId)
                             .limit(1)
                             .get();
 
-                        if (!q.empty) {
-                            // Already exists, skip or update?
-                            // Skip to avoid overwriting newer data if script matches again
-                            return;
+                        if (!existing.empty) {
+                            stats.dataDocsSkipped++;
+                            continue;
                         }
 
-                        await adminDb.collection('anagrafica_data').add({
-                            anagraficaId,
-                            structureId,
-                            ...structurePayload,
-                            migratedAt: new Date(),
-                            migratedBy: userUid,
-                            updatedAt: data.updatedAt || new Date(), // Keep original timestamp if possible
-                            status: 'Active'
-                        });
-                    }));
+                        if (!dryRun) {
+                            await adminDb.collection('anagrafica_data').add({
+                                anagraficaId,
+                                structureId,
+                                ...structurePayload,
+                                status: 'Active',
+                                updatedAt: data.updatedAt || new Date(),
+                                updatedBy: data.registeredBy || userUid,
+                                migratedAt: new Date(),
+                                migratedBy: userUid,
+                                createdAt: data.createdAt || new Date(),
+                            });
+                        }
+                        stats.dataDocsCreated++;
+                    }
 
-                    // Optional: Mark main doc as migrated
-                    // await doc.ref.update({ migrationStatus: 'completed' });
+                    // Remove structure fields from anagrafica doc
+                    if (!dryRun) {
+                        const fieldsToDelete = {};
+                        for (const field of structureFieldsPresent) {
+                            fieldsToDelete[field] = admin.firestore.FieldValue.delete();
+                        }
+                        await doc.ref.update(fieldsToDelete);
+                        stats.anagraficaCleaned++;
+                    }
                 }
-
-                stats.migrated++;
-                stats.processed++;
 
             } catch (err) {
                 console.error(`[MIGRATION] Error migrating doc ${doc.id}:`, err);
@@ -121,11 +148,14 @@ export async function migrateAnagraficaStructure(limit = 100, dryRun = true) {
         return {
             success: true,
             stats,
-            message: `Migration run completed. Processed: ${stats.processed}, Migrated (docs): ${stats.migrated}`
+            message: `Migration ${dryRun ? '(dry run) ' : ''}completed. ` +
+                `Inspected: ${stats.total}, Needed migration: ${stats.needsMigration}, ` +
+                `Personal nested: ${stats.personalFieldsNested}, ` +
+                `Data docs created: ${stats.dataDocsCreated}, Cleaned: ${stats.anagraficaCleaned}`
         };
 
     } catch (error) {
-        console.error("[MIGRATION] Fatal error:", error);
+        console.error('[MIGRATION] Fatal error:', error);
         return { success: false, error: error.message };
     }
 }
