@@ -279,6 +279,8 @@ export default function AnagraficaForm({ params }) {
                   <AccessServicesForm
                     state={accessState}
                     onChange={updateAccessField}
+                    showClassification={true}
+                    showReferralEntity={true}
                     categories={categories}
                     onNewSubcategory={handleNewSubcategory}
                   />

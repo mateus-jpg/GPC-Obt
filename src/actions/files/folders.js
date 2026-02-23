@@ -5,110 +5,11 @@ import { requireUser, verifyUserPermissions } from '@/utils/server-auth';
 import { getAnagraficaInternal } from '../anagrafica/anagrafica';
 import { logDataCreate, logDataUpdate, logDataDelete } from '@/utils/audit';
 import { CACHE_TAGS, invalidateFolderCaches } from '@/lib/cache';
-import { FILE_CATEGORIES } from '@/config/constants';
 
 const adminDb = admin.firestore();
 
 // Maximum folder depth to prevent deeply nested structures
 const MAX_FOLDER_DEPTH = 5;
-
-/**
- * Initialize default category folders for an anagrafica
- * Creates 9 folders based on FILE_CATEGORIES
- *
- * @param {string} anagraficaId - Anagrafica ID
- * @param {string[]} structureIds - Structure IDs that can access
- * @param {string} userUid - User creating folders
- * @param {string} userEmail - User email
- * @returns {Promise<Object>} Created folders
- */
-export async function initializeDefaultFolders(anagraficaId, structureIds, userUid, userEmail) {
-  try {
-    // Check if default folders already exist
-    const existingFolders = await adminDb.collection('folders')
-      .where('anagraficaId', '==', anagraficaId)
-      .where('isDefaultCategory', '==', true)
-      .where('deleted', '==', false)
-      .get();
-
-    if (!existingFolders.empty) {
-      // Default folders already exist
-      return {
-        success: true,
-        folders: existingFolders.docs.map(doc => ({ id: doc.id, ...doc.data() })),
-        message: 'Default folders already exist'
-      };
-    }
-
-    const folders = [];
-    const batch = adminDb.batch();
-
-    // Create folders for each category
-    for (const [key, value] of Object.entries(FILE_CATEGORIES)) {
-      const folderRef = adminDb.collection('folders').doc();
-      const folderName = key; // Use key (e.g., "IDENTITY") as folder name
-
-      const folderData = {
-        nome: folderName,
-
-        // Hierarchy
-        anagraficaId,
-        parentFolderId: null,
-        path: `/${folderName}`,
-        depth: 0,
-
-        // Metadata
-        isDefaultCategory: true,
-        category: value,
-
-        // Access Control
-        structureIds: structureIds || [],
-
-        // Audit
-        createdAt: new Date(),
-        createdBy: userUid,
-        createdByEmail: userEmail,
-        updatedAt: new Date(),
-
-        // Soft Delete
-        deleted: false,
-        deletedAt: null,
-        deletedBy: null
-      };
-
-      batch.set(folderRef, folderData);
-      folders.push({ id: folderRef.id, ...folderData });
-    }
-
-    await batch.commit();
-
-    // Audit log
-    await logDataCreate({
-      actorUid: userUid,
-      resourceType: 'folders',
-      resourceId: anagraficaId,
-      details: {
-        action: 'initialize_default_folders',
-        folderCount: folders.length
-      }
-    });
-
-    // Invalidate cache
-    invalidateFolderCaches(anagraficaId);
-
-    return {
-      success: true,
-      folders
-    };
-
-  } catch (error) {
-    console.error('[INITIALIZE_DEFAULT_FOLDERS_ERROR]:', error);
-    return {
-      error: true,
-      message: error.message
-    };
-  }
-}
 
 /**
  * Get folder tree for an anagrafica

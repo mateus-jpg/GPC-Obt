@@ -94,8 +94,8 @@ export async function getAnagraficaInternal(anagraficaId, userUid, structureId =
     },
     [`anagrafica_all_data`, anagraficaId],
     {
-      tags: [`anagrafica_data-${anagraficaId}`], // General tag for this person's data
-      revalidate: 3600
+      tags: [CACHE_TAGS.anagraficaData(anagraficaId)],
+      revalidate: REVALIDATE.anagraficaDetail
     }
   );
 
@@ -111,6 +111,31 @@ export async function getAnagraficaInternal(anagraficaId, userUid, structureId =
 
   // Collect others (excluding current if it exists)
   otherStructuresData = allStructureDocs.filter(d => d.structureId !== structureId);
+
+  // Enrich otherStructuresData with structure names
+  if (otherStructuresData.length > 0) {
+    const otherStructureIds = [...new Set(otherStructuresData.map(d => d.structureId))];
+    const structureNames = {};
+
+    // Fetch structure documents to get display names
+    for (const sId of otherStructureIds) {
+      try {
+        const structureDoc = await adminDb.collection('structures').doc(sId).get();
+        if (structureDoc.exists) {
+          structureNames[sId] = structureDoc.data().name || sId;
+        } else {
+          structureNames[sId] = sId;
+        }
+      } catch {
+        structureNames[sId] = sId;
+      }
+    }
+
+    otherStructuresData = otherStructuresData.map(d => ({
+      ...d,
+      structureName: structureNames[d.structureId] || d.structureId
+    }));
+  }
 
   // 4. Merge Data
   // Global data already has personal info nested under 'anagrafica' key in Firestore
@@ -394,13 +419,8 @@ export async function updateAnagraficaInternal(anagraficaId, body, userUid, user
     changedFields: result.changedGroups
   });
 
-  // Invalidate caches
-  // Invalidate specific structure cache too
+  // Invalidate caches (includes anagrafica_data tag for cross-structure visibility)
   invalidateAnagraficaCaches(anagraficaId, result.allowedStructures);
-  if (structureId) {
-    // Manual tag invalidation if not covered by helper
-    // CACHE_TAGS.anagrafica_data might not exist yet in helper
-  }
 
   // Return merged data via getInternal
   return await getAnagraficaInternal(anagraficaId, userUid, structureId);

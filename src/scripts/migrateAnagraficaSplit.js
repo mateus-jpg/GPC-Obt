@@ -1,18 +1,36 @@
 /**
- * Migration Script: Split Anagrafica into Global + Structure Data
+ * Migration Script: Migrate Anagrafica from Main to Experiments format
  *
- * Old format (single 'anagrafica' document with everything flat):
- *   { nome, cognome, sesso, ..., nucleoFamiliare: {...}, legaleAbitativa: {...}, ..., canBeAccessedBy: [...] }
+ * Old format (main branch - single 'anagrafica' doc, body spread flat):
+ *   anagrafica/{id}: {
+ *     anagrafica: { nome, cognome, sesso, ... },   // personal info (already nested from form)
+ *     nucleoFamiliare: {...},                        // structure-specific at root
+ *     legaleAbitativa: {...},                        // structure-specific at root
+ *     lavoroFormazione: {...},                       // structure-specific at root
+ *     vulnerabilita: {...},                          // structure-specific at root
+ *     referral: {...},                               // structure-specific at root
+ *     notes: '...',                                  // structure-specific at root
+ *     registeredByStructure: '...',                  // leftover from form spread
+ *     canBeAccessedBy: [...], structureIds: [...],
+ *     registeredBy, createdAt, updatedAt, deleted
+ *   }
  *
- * New format (split into two collections, personal info nested):
- *   anagrafica/{id}:        { anagrafica: { nome, cognome, sesso, ... }, canBeAccessedBy: [...] }
- *   anagrafica_data/{auto}: { anagraficaId, structureId, nucleoFamiliare: {...}, legaleAbitativa: {...}, ... }
+ * New format (experiments branch - split into two collections):
+ *   anagrafica/{id}: {
+ *     anagrafica: { nome, cognome, sesso, ... },    // personal info only
+ *     canBeAccessedBy: [...], structureIds: [...],
+ *     registeredBy, createdAt, updatedAt, deleted
+ *   }
+ *   anagrafica_data/{auto}: {
+ *     anagraficaId, structureId,
+ *     nucleoFamiliare: {...}, legaleAbitativa: {...}, ...
+ *     status, createdAt, updatedAt, updatedBy
+ *   }
  *
  * What this script does:
- *   1. Finds all 'anagrafica' docs that have personal or structure fields flat at root level
- *   2. Nests personal fields under an 'anagrafica' key in the document
- *   3. For each structure in canBeAccessedBy, creates an 'anagrafica_data' doc (if not already present)
- *   4. Removes the old flat fields from the 'anagrafica' doc
+ *   Step A: Nests any flat personal fields under an 'anagrafica' key (edge case)
+ *   Step B: Moves structure fields to 'anagrafica_data' collection (one per structure)
+ *   Step C: Cleans up leftover fields (registeredByStructure, etc.) from anagrafica doc
  *
  * Usage:
  *   DRY RUN (preview only, no changes):
@@ -45,6 +63,22 @@ const STRUCTURE_FIELDS = [
   'notes',
 ];
 
+// Fields that are ALLOWED to remain in the anagrafica doc (new format)
+const ALLOWED_GLOBAL_FIELDS = [
+  'anagrafica',          // nested personal info
+  'canBeAccessedBy',     // structure access list
+  'structureIds',        // same as canBeAccessedBy
+  'registeredBy',        // who created
+  'createdAt',           // creation timestamp
+  'updatedAt',           // last update timestamp
+  'updatedBy',           // who last updated
+  'updatedByMail',       // updater email
+  'updatedByStructure',  // which structure made the update
+  'deleted',             // soft delete flag
+  'deletedAt',           // soft delete timestamp
+  'deletedBy',           // who deleted
+];
+
 // Parse CLI args
 const args = process.argv.slice(2);
 const DRY_RUN = !args.includes('--execute');
@@ -67,6 +101,7 @@ async function migrateAnagraficaSplit() {
     personalFieldsNested: 0,
     dataDocsCreated: 0,
     dataDocsSkipped: 0,
+    fieldsCleanedUp: 0,
     errors: 0,
   };
 
@@ -94,9 +129,15 @@ async function migrateAnagraficaSplit() {
       const flatPersonalFields = PERSONAL_FIELDS.filter(f => data[f] !== undefined);
       // Detect structure fields at root (= needs moving to anagrafica_data)
       const structureFieldsPresent = STRUCTURE_FIELDS.filter(f => data[f] !== undefined);
+      // Detect leftover fields that shouldn't be in the new format
+      const leftoverFields = Object.keys(data).filter(f =>
+        !ALLOWED_GLOBAL_FIELDS.includes(f) &&
+        !PERSONAL_FIELDS.includes(f) &&
+        !STRUCTURE_FIELDS.includes(f)
+      );
 
-      // Already has nested 'anagrafica' key and no flat fields -> already migrated
-      if (flatPersonalFields.length === 0 && structureFieldsPresent.length === 0) {
+      // Already fully migrated: no flat fields, no structure fields, no leftovers
+      if (flatPersonalFields.length === 0 && structureFieldsPresent.length === 0 && leftoverFields.length === 0) {
         stats.alreadyMigrated++;
         continue;
       }
@@ -205,6 +246,28 @@ async function migrateAnagraficaSplit() {
         }
       }
 
+      // --- Step C: Clean up leftover fields ---
+      if (leftoverFields.length > 0) {
+        console.log(`  Leftover fields to remove: ${leftoverFields.join(', ')}`);
+
+        if (!DRY_RUN) {
+          try {
+            const cleanupPayload = {};
+            for (const field of leftoverFields) {
+              cleanupPayload[field] = admin.firestore.FieldValue.delete();
+            }
+            await doc.ref.update(cleanupPayload);
+            console.log(`  Removed ${leftoverFields.length} leftover fields`);
+          } catch (err) {
+            console.error(`  ERROR cleaning up leftover fields:`, err.message);
+            stats.errors++;
+          }
+        } else {
+          console.log(`  Would remove ${leftoverFields.length} leftover fields`);
+        }
+        stats.fieldsCleanedUp++;
+      }
+
       console.log();
     }
   } catch (error) {
@@ -227,6 +290,7 @@ migrateAnagraficaSplit()
     console.log(`  Personal fields nested:        ${stats.personalFieldsNested}`);
     console.log(`  anagrafica_data created:       ${stats.dataDocsCreated}`);
     console.log(`  anagrafica_data skipped:       ${stats.dataDocsSkipped}`);
+    console.log(`  Leftover fields cleaned:       ${stats.fieldsCleanedUp}`);
     console.log(`  Errors:                        ${stats.errors}`);
     console.log('='.repeat(60));
 

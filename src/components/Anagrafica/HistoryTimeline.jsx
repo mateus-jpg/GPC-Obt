@@ -286,6 +286,13 @@ function HistoryEntry({ entry }) {
     )
 }
 
+function isEmptyValue(value) {
+    if (value === null || value === undefined) return true
+    if (value === "" || value === 0) return true
+    if (Array.isArray(value) && value.length === 0) return true
+    return false
+}
+
 function GroupChanges({ groupName, before, after }) {
     // Get all unique keys from both before and after
     const allKeys = new Set([
@@ -294,10 +301,16 @@ function GroupChanges({ groupName, before, after }) {
     ])
 
     // Filter to only show fields that actually changed
+    // Also include fields that went from empty to a value or vice versa
     const changedFields = Array.from(allKeys).filter(key => {
-        const beforeVal = JSON.stringify(before?.[key])
-        const afterVal = JSON.stringify(after?.[key])
-        return beforeVal !== afterVal
+        const beforeVal = before?.[key]
+        const afterVal = after?.[key]
+
+        // Skip if both are empty/meaningless
+        if (isEmptyValue(beforeVal) && isEmptyValue(afterVal)) return false
+
+        // Show if values are different (including empty-to-value transitions)
+        return JSON.stringify(beforeVal) !== JSON.stringify(afterVal)
     })
 
     if (changedFields.length === 0) {

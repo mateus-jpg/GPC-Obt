@@ -14,6 +14,7 @@ import { CACHE as CACHE_CONFIG } from '@/config/constants';
 export const CACHE_TAGS = {
   // Anagrafica
   anagrafica: (id) => `anagrafica-${id}`,
+  anagraficaData: (anagraficaId) => `anagrafica_data-${anagraficaId}`,
   anagraficaList: (structureId) => `anagrafica-list-${structureId}`,
 
   // Structures
@@ -57,6 +58,9 @@ export const REVALIDATE = {
 export function invalidateAnagraficaCaches(anagraficaId, structureIds = []) {
   // Invalidate the specific anagrafica detail cache
   revalidateTag(CACHE_TAGS.anagrafica(anagraficaId));
+
+  // Invalidate structure-specific data cache (anagrafica_data collection)
+  revalidateTag(CACHE_TAGS.anagraficaData(anagraficaId));
 
   // Invalidate accessi cache for this anagrafica
   revalidateTag(CACHE_TAGS.accessi(anagraficaId));
