@@ -13,6 +13,34 @@ export const ANAGRAFICA_GROUPS = [
   'referral'
 ];
 
+// Personal/identity fields stored flat in the 'anagrafica' Firestore collection
+// These get wrapped under an 'anagrafica' key when returned to the client
+export const ANAGRAFICA_PERSONAL_FIELDS = [
+  'nome', 'cognome', 'sesso', 'dataDiNascita', 'luogoDiNascita',
+  'codiceFiscale', 'cittadinanza', 'comuneDiDomicilio', 'telefono', 'email'
+];
+
+/**
+ * Wraps flat personal fields from a Firestore anagrafica document
+ * into a nested { anagrafica: {...}, ...rest } structure.
+ * @param {Object} flatDoc - Flat Firestore document data (with id)
+ * @returns {Object} Document with personal fields nested under 'anagrafica' key
+ */
+export function wrapPersonalFields(flatDoc) {
+  const anagraficaData = {};
+  const rest = {};
+
+  for (const [key, value] of Object.entries(flatDoc)) {
+    if (ANAGRAFICA_PERSONAL_FIELDS.includes(key)) {
+      anagraficaData[key] = value;
+    } else {
+      rest[key] = value;
+    }
+  }
+
+  return { ...rest, anagrafica: anagraficaData };
+}
+
 /**
  * Compute which groups have changed between old and new data
  * @param {Object} oldData - Previous anagrafica data

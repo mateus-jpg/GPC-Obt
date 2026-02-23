@@ -1,6 +1,6 @@
 {
   "name": "gpc",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
@@ -104,6 +104,7 @@
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
     "@vitejs/plugin-react": "^5.1.2",
+    "dotenv": "^17.2.4",
     "jsdom": "^27.4.0",
     "typescript": "5.9.3",
     "vitest": "^4.0.17"

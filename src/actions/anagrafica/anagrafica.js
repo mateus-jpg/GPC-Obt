@@ -94,8 +94,8 @@ export async function getAnagraficaInternal(anagraficaId, userUid, structureId =
     },
     [`anagrafica_all_data`, anagraficaId],
     {
-      tags: [`anagrafica_data-${anagraficaId}`], // General tag for this person's data
-      revalidate: 3600
+      tags: [CACHE_TAGS.anagraficaData(anagraficaId)],
+      revalidate: REVALIDATE.anagraficaDetail
     }
   );
 
@@ -112,18 +112,42 @@ export async function getAnagraficaInternal(anagraficaId, userUid, structureId =
   // Collect others (excluding current if it exists)
   otherStructuresData = allStructureDocs.filter(d => d.structureId !== structureId);
 
+  // Enrich otherStructuresData with structure names
+  if (otherStructuresData.length > 0) {
+    const otherStructureIds = [...new Set(otherStructuresData.map(d => d.structureId))];
+    const structureNames = {};
+
+    // Fetch structure documents to get display names
+    for (const sId of otherStructureIds) {
+      try {
+        const structureDoc = await adminDb.collection('structures').doc(sId).get();
+        if (structureDoc.exists) {
+          structureNames[sId] = structureDoc.data().name || sId;
+        } else {
+          structureNames[sId] = sId;
+        }
+      } catch {
+        structureNames[sId] = sId;
+      }
+    }
+
+    otherStructuresData = otherStructuresData.map(d => ({
+      ...d,
+      structureName: structureNames[d.structureId] || d.structureId
+    }));
+  }
+
   // 4. Merge Data
-  // Priority: Structure Data overrides Global Data if collision (though keys should be distinct)
-  // We explicitly map structure fields to ensure clean merging
+  // Global data already has personal info nested under 'anagrafica' key in Firestore
+  // Extract structure group data (exclude metadata fields from structureData)
+  const { id: _sdId, anagraficaId: _sdAid, structureId: _sdSid, updatedAt: _sdUpd, updatedBy: _sdUpBy, createdAt: _sdCr, status: _sdSt, ...structureGroups } = structureData;
+
   const result = {
-    ...globalData,
-    ...structureData,
-    // explicit overrides to ensure structureId context is preserved/correct
-    id: globalData.id, // Keep global ID as main ID
+    ...globalData,          // { anagrafica: { nome, cognome, ... }, canBeAccessedBy, createdAt, ... }
+    ...structureGroups,     // { nucleoFamiliare: {...}, legaleAbitativa: {...}, ... }
+    id: globalData.id,
     globalId: globalData.id,
     structureDataId: structureData.id,
-
-    // New Field: Data from other structures
     otherStructuresData: otherStructuresData
   };
 
@@ -191,12 +215,23 @@ export async function updateAnagraficaInternal(anagraficaId, body, userUid, user
     }
 
     // 3. Split Payload
-    const globalFields = ['nome', 'cognome', 'sesso', 'dataDiNascita', 'luogoDiNascita', 'codiceFiscale', 'cittadinanza', 'comuneDiDomicilio', 'telefono', 'email', 'canBeAccessedBy', 'structureIds'];
+    // Personal info comes nested: { anagrafica: { nome, ... }, nucleoFamiliare: {...}, ... }
+    // Personal fields are stored nested in Firestore as 'anagrafica.fieldName'
     const globalUpdate = {};
     const structureUpdate = {};
 
+    // Handle personal info nested under 'anagrafica' key
+    // Use Firestore dot notation to update individual nested fields
+    if (body.anagrafica && typeof body.anagrafica === 'object') {
+      Object.keys(body.anagrafica).forEach(key => {
+        globalUpdate[`anagrafica.${key}`] = body.anagrafica[key];
+      });
+    }
+
+    // Handle root-level global fields (canBeAccessedBy, etc.) and structure groups
     Object.keys(body).forEach(key => {
-      if (globalFields.includes(key)) {
+      if (key === 'anagrafica') return; // Already handled above
+      if (key === 'canBeAccessedBy' || key === 'structureIds') {
         globalUpdate[key] = body[key];
       } else {
         structureUpdate[key] = body[key];
@@ -212,19 +247,15 @@ export async function updateAnagraficaInternal(anagraficaId, body, userUid, user
     structureUpdate['updatedBy'] = userUid;
 
     // 4. Calculate Changes (History)
-    // For global changes, we need to wrap flat fields under 'anagrafica' group
-    // Extract actual data fields (excluding metadata)
-    const globalMetadataFields = ['updatedAt', 'updatedBy', 'updatedByMail', 'updatedByStructure'];
-    const globalDataFields = {};
-    Object.keys(globalUpdate).forEach(key => {
-      if (!globalMetadataFields.includes(key)) {
-        globalDataFields[key] = globalUpdate[key];
-      }
-    });
+    // Firestore doc has anagrafica nested: { anagrafica: { nome, ... }, ... }
+    // Compare old vs new personal info
+    const oldAnagrafica = anagraficaData.anagrafica || {};
+    const newAnagrafica = body.anagrafica
+      ? { ...oldAnagrafica, ...body.anagrafica }
+      : oldAnagrafica;
 
-    // Wrap in 'anagrafica' group for comparison
-    const oldGlobalWrapped = { anagrafica: anagraficaData };
-    const newGlobalWrapped = { anagrafica: { ...anagraficaData, ...globalDataFields } };
+    const oldGlobalWrapped = { anagrafica: oldAnagrafica };
+    const newGlobalWrapped = { anagrafica: newAnagrafica };
     const { changedGroups: globalChangedGroups, changes: globalChanges } = computeGroupChanges(oldGlobalWrapped, newGlobalWrapped);
 
     // Structure changes - data is already organized by groups
@@ -257,7 +288,8 @@ export async function updateAnagraficaInternal(anagraficaId, body, userUid, user
 
     // 5. Perform Updates
     // Check if we have actual data changes (not just metadata)
-    const hasGlobalDataChanges = Object.keys(globalDataFields).length > 0;
+    const globalMetadataFields = ['updatedAt', 'updatedBy', 'updatedByMail', 'updatedByStructure'];
+    const hasGlobalDataChanges = Object.keys(globalUpdate).some(key => !globalMetadataFields.includes(key));
 
     if (hasGlobalDataChanges) {
       transaction.update(anagraficaRef, globalUpdate);
@@ -387,13 +419,8 @@ export async function updateAnagraficaInternal(anagraficaId, body, userUid, user
     changedFields: result.changedGroups
   });
 
-  // Invalidate caches
-  // Invalidate specific structure cache too
+  // Invalidate caches (includes anagrafica_data tag for cross-structure visibility)
   invalidateAnagraficaCaches(anagraficaId, result.allowedStructures);
-  if (structureId) {
-    // Manual tag invalidation if not covered by helper
-    // CACHE_TAGS.anagrafica_data might not exist yet in helper
-  }
 
   // Return merged data via getInternal
   return await getAnagraficaInternal(anagraficaId, userUid, structureId);
@@ -482,11 +509,11 @@ export async function createAnagrafica(body, services = []) {
     });
 
     // 3. PREPARE DATA SPLIT
-    // Global fields (Identity)
+    // Global fields (Identity) - personal info nested under 'anagrafica' key
     const globalData = {
-      ...body.anagrafica, // nome, cognome, cf, etc.
+      anagrafica: body.anagrafica, // { nome, cognome, sesso, dataDiNascita, ... }
       canBeAccessedBy: body.canBeAccessedBy || [structureId],
-      structureIds: body.canBeAccessedBy || [structureId], // Keep for backward compat/indexing
+      structureIds: body.canBeAccessedBy || [structureId],
       registeredBy: userUid,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -513,12 +540,12 @@ export async function createAnagrafica(body, services = []) {
     // For now, we assume it's new logic or we implement a check later.
     // The plan said "Check if global anagrafica exists".
     // Let's do a simple check by Codice Fiscale if present
-    const cf = globalData.codiceFiscale;
+    const cf = body.anagrafica?.codiceFiscale;
     let existingDoc = null;
 
     if (cf) {
       const querySnap = await adminDb.collection('anagrafica')
-        .where('codiceFiscale', '==', cf)
+        .where('anagrafica.codiceFiscale', '==', cf)
         .where('deleted', '==', false)
         .limit(1)
         .get();
@@ -578,7 +605,7 @@ export async function createAnagrafica(body, services = []) {
         changes: {
           anagrafica: {
             before: null,
-            after: globalData
+            after: globalData.anagrafica
           }
         },
         userUid,

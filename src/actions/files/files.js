@@ -6,8 +6,7 @@ import { requireUser, verifyUserPermissions } from '@/utils/server-auth';
 import { getAnagraficaInternal } from '../anagrafica/anagrafica';
 import { logDataCreate, logFileAccess, logDataDelete } from '@/utils/audit';
 import { CACHE_TAGS, REVALIDATE, invalidateFilesCache } from '@/lib/cache';
-import { initializeDefaultFolders } from './folders';
-import { FILE_CATEGORIES } from '@/config/constants';
+import { createFolderInternal } from './folders';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 
@@ -97,7 +96,7 @@ async function createFileDocument({
   displayName,
   mimeType,
   size,
-  category = FILE_CATEGORIES.OTHER,
+  category = 'OTHER',
   tags = [],
   documentDate = null,
   expirationDate = null,
@@ -173,7 +172,7 @@ export async function uploadFiles({
   files,
   folderId = null,
   accessoId = null,
-  category = FILE_CATEGORIES.OTHER,
+  category = 'OTHER',
   tags = [],
   expirationDate = null,
   structureId
@@ -193,31 +192,37 @@ export async function uploadFiles({
       structureId
     });
 
-    // 3. INITIALIZE DEFAULT FOLDERS IF NEEDED (only if using folderId approach)
+    // 3. RESOLVE TARGET FOLDER
     let targetFolderId = folderId;
 
     if (!targetFolderId) {
-      // Backward compatibility: If no folderId provided, initialize default folders
-      // and find the folder matching the category
-      const foldersResult = await initializeDefaultFolders(
-        anagraficaId,
-        allowedStructures,
-        userUid,
-        userEmail
-      );
+      // No folderId provided: find or create a folder by category name
+      const folderName = category || 'Documenti';
 
-      if (foldersResult.error) {
-        throw new Error(`Failed to initialize folders: ${foldersResult.message}`);
+      const folderQuery = await adminDb.collection('folders')
+        .where('anagraficaId', '==', anagraficaId)
+        .where('nome', '==', folderName)
+        .where('deleted', '==', false)
+        .limit(1)
+        .get();
+
+      if (!folderQuery.empty) {
+        targetFolderId = folderQuery.docs[0].id;
+      } else {
+        const newFolderResult = await createFolderInternal({
+          anagraficaId,
+          nome: folderName,
+          parentFolderId: null,
+          structureId,
+          userUid,
+          userEmail
+        });
+
+        if (!newFolderResult.success) {
+          throw new Error(`Failed to create folder: ${newFolderResult.message}`);
+        }
+        targetFolderId = newFolderResult.folder.id;
       }
-
-      // Find folder matching the category
-      const categoryFolder = foldersResult.folders.find(f => f.category === category);
-
-      if (!categoryFolder) {
-        throw new Error(`No folder found for category: ${category}`);
-      }
-
-      targetFolderId = categoryFolder.id;
     } else {
       // Verify folder exists and belongs to this anagrafica
       const folderDoc = await adminDb.collection('folders').doc(targetFolderId).get();

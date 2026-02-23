@@ -15,18 +15,13 @@ async function fetchAnagraficaListFromDb(structureId) {
     .where("canBeAccessedBy", "array-contains", structureId)
     .where("deleted", "!=", true)
     .get();
-  
-  const snapshot = snap.docs.map(doc => {
-    const d = doc.data();
-    console.log("diocane", structureId)
-    console.log(d)
-    return {
-      id: doc.id,
-      ...JSON.parse(JSON.stringify(d)),
-    };
-  });
-  console.log(snapshot)
-  return snapshot;
+
+  // Firestore docs already have personal info nested under 'anagrafica' key
+  // Shape: { id, anagrafica: { nome, cognome, ... }, canBeAccessedBy, createdAt, ... }
+  return snap.docs.map(doc => ({
+    id: doc.id,
+    ...JSON.parse(JSON.stringify(doc.data())),
+  }));
 }
 
 /**
@@ -35,7 +30,6 @@ async function fetchAnagraficaListFromDb(structureId) {
  * @param {string} structure - The structure ID to fetch records for
  */
 export async function getData(structure) {
-  console.log(structure)
   const getCachedData = unstable_cache(
     async () => fetchAnagraficaListFromDb(structure),
     [`anagrafica-list`, structure],
@@ -46,6 +40,5 @@ export async function getData(structure) {
   );
 
   const data = await getCachedData();
-  console.log("data", data)
   return JSON.stringify(data);
 }

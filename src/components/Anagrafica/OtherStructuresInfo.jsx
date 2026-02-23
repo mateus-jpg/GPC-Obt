@@ -28,7 +28,7 @@ export default function OtherStructuresInfo({ otherStructuresData }) {
                             <AccordionTrigger className="hover:no-underline">
                                 <div className="flex items-center gap-3">
                                     <Building2 className="w-4 h-4 text-gray-500" />
-                                    <span className="font-semibold text-gray-700">Struttura: {data.structureId}</span>
+                                    <span className="font-semibold text-gray-700">Struttura: {data.structureName || data.structureId}</span>
                                     <Badge variant="secondary" className="text-xs font-normal">
                                         Aggiornato: {formatDate(data.updatedAt)}
                                     </Badge>
