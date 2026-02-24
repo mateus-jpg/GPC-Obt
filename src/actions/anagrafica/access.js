@@ -469,5 +469,5 @@ export async function getAccessByIdAction(accessId, anagraficaId) {
     details: { anagraficaId }
   });
 
-  return JSON.stringify({ id: accessSnap.id, ...data });
+  return JSON.stringify({ success: true, accesso: { id: accessSnap.id, ...data } });
 }
