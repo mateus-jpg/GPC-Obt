@@ -235,6 +235,24 @@ export async function createAccessInternal({ anagraficaId, services, structureId
 
   await accessRef.set(accessData);
 
+  // Write history entry for creation (graceful failure — does not break main flow)
+  try {
+    await adminDb.collection('accessi').doc(accessId).collection('history').add({
+      anagraficaId,
+      changedAt: new Date(),
+      changedBy: userUid,
+      changedByMail: null,
+      changedByStructure: structureId,
+      changeType: 'create',
+      changedGroups: ['services'],
+      changes: {
+        services: { before: null, after: processedServices }
+      }
+    });
+  } catch (histErr) {
+    console.error('Failed to write accesso history (create):', histErr);
+  }
+
   // Invalidate caches after creating new access
   invalidateAccessiCache(anagraficaId);
   invalidateFilesCache(anagraficaId);
