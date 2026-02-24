@@ -437,3 +437,37 @@ export async function getAccessFileUrl({ anagraficaId, filePath }) {
 
   return { success: true, url };
 }
+
+/**
+ * Get a single accesso record by ID.
+ * Verifies the calling user has permission via the parent anagrafica.
+ */
+export async function getAccessByIdAction(accessId, anagraficaId) {
+  const { userUid } = await requireUser();
+
+  if (!accessId || !anagraficaId) throw new Error('Missing parameters');
+
+  const anagraficaRef = adminDb.collection('anagrafica').doc(anagraficaId);
+  const anagraficaSnap = await anagraficaRef.get();
+  if (!anagraficaSnap.exists) throw new Error('Anagrafica not found');
+
+  const anagraficaData = anagraficaSnap.data() || {};
+  const allowedStructures = anagraficaData.canBeAccessedBy || anagraficaData.structureIds || [];
+
+  await verifyUserPermissions({ userUid, allowedStructures });
+
+  const accessSnap = await adminDb.collection('accessi').doc(accessId).get();
+  if (!accessSnap.exists) throw new Error('Accesso not found');
+
+  const data = accessSnap.data();
+  if (data.anagraficaId !== anagraficaId) throw new Error('Access record does not belong to this anagrafica');
+
+  await logDataAccess({
+    actorUid: userUid,
+    resourceType: 'accessi',
+    resourceId: accessId,
+    details: { anagraficaId }
+  });
+
+  return JSON.stringify({ id: accessSnap.id, ...data });
+}
