@@ -149,7 +149,10 @@ export async function getFolderContents({ folderId, anagraficaId = null, include
       dataCreazione: doc.data().dataCreazione?.toDate?.()?.toISOString() || doc.data().dataCreazione,
       dataScadenza: doc.data().dataScadenza?.toDate?.()?.toISOString() || doc.data().dataScadenza,
       createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || doc.data().createdAt,
-      updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString() || doc.data().updatedAt
+      updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString() || doc.data().updatedAt,
+      migratedAt: doc.data().migratedAt?.toDate?.()?.toISOString() || doc.data().migratedAt || null,
+      deletedAt: doc.data().deletedAt?.toDate?.()?.toISOString() || doc.data().deletedAt || null,
+      lastAccessedAt: doc.data().lastAccessedAt?.toDate?.()?.toISOString() || doc.data().lastAccessedAt || null
     }));
 
     // 5. BUILD BREADCRUMBS
