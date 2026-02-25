@@ -19,6 +19,7 @@ export default function AccessServicesForm({
     showReferralEntity = false,
     categories = null, // Custom categories from structure (optional, defaults to AccessTypes)
     onNewSubcategory = null, // Callback when user adds new subcategory via Altro: (categoryValue, newSubcategory) => void
+    existingFilesRenderer = null, // (typeValue) => ReactNode — renders existing files above the Dropzone
 }) {
     // Use provided categories or fall back to defaults
     const accessTypes = categories && categories.length > 0 ? categories : DefaultAccessTypes;
@@ -155,6 +156,7 @@ export default function AccessServicesForm({
                         {/* Files */}
                         <div className="space-y-2">
                             <Label>Allegati</Label>
+                            {existingFilesRenderer && existingFilesRenderer(type.value)}
                             <Dropzone
                                 onDrop={(acceptedFiles) => {
                                     const newFiles = acceptedFiles.map((file) => ({

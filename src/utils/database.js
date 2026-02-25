@@ -73,6 +73,7 @@ export function arraysIntersect(a = [], b = []) {
 export const collections = {
     operators: () => db.collection('operators'),
     users: () => db.collection('users'),
+    projects: () => db.collection('projects'),
     structures: () => db.collection('structures'),
     anagrafica: () => db.collection('anagrafica'),
     auditLogs: () => db.collection('audit_logs'),

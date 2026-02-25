@@ -6,6 +6,7 @@ import { logger } from '@/utils/logger';
 import { logResourceModification, logAdminAction } from '@/utils/audit';
 import { serializeFirestoreData } from '@/lib/utils';
 import { AccessTypes as DefaultAccessTypes } from '@/components/Anagrafica/AccessDialog/AccessTypes';
+import { DEFAULT_FORM_CONFIGURATION, mergeWithDefaults, SECTION_DEFINITIONS } from '@/data/formConfigDefaults';
 
 /**
  * Retrieves structure information.
@@ -448,9 +449,11 @@ export async function resetStructureCategoriesToDefaults(structureId) {
 /**
  * Creates a new structure.
  * Requires Super Admin privileges.
+ * If projectId is provided, the structure will be associated with that project.
  *
  * @param {Object} data - Structure data
  * @param {string} data.name - Structure name (required)
+ * @param {string} [data.projectId] - Project ID to associate structure with
  * @param {string} [data.email] - Structure email
  * @param {string} [data.address] - Structure address
  * @param {string} [data.city] - Structure city
@@ -462,12 +465,21 @@ export async function createStructure(data) {
     try {
         const { userUid } = await requireUser();
 
-        // Only super admins can create structures
+        // Only super admins can create structures without a project
+        // Project admins can create structures via createStructureInProject
         await verifySuperAdmin({ userUid });
 
         // Validate required fields
         if (!data || !data.name || typeof data.name !== 'string' || !data.name.trim()) {
             return { success: false, error: 'Structure name is required' };
+        }
+
+        // If projectId provided, verify project exists
+        if (data.projectId) {
+            const projectDoc = await collections.projects().doc(data.projectId).get();
+            if (!projectDoc.exists) {
+                return { success: false, error: 'Project not found' };
+            }
         }
 
         const structureData = {
@@ -477,6 +489,7 @@ export async function createStructure(data) {
             city: data.city?.trim() || '',
             phone: data.phone?.trim() || '',
             description: data.description?.trim() || '',
+            projectId: data.projectId || null,
             admins: [],
             accessCategories: JSON.parse(JSON.stringify(DefaultAccessTypes)),
             createdAt: new Date(),
@@ -492,14 +505,194 @@ export async function createStructure(data) {
         await logAdminAction({
             action: 'create_structure',
             actorUid: userUid,
-            details: { structureId: docRef.id, name: structureData.name }
+            details: { structureId: docRef.id, name: structureData.name, projectId: data.projectId || null }
         });
 
-        logger.info('Created new structure', { actorUid: userUid, structureId: docRef.id, name: structureData.name });
+        logger.info('Created new structure', { actorUid: userUid, structureId: docRef.id, name: structureData.name, projectId: data.projectId || null });
 
         return { success: true, structureId: docRef.id };
     } catch (error) {
         logger.error('Error creating structure', error);
+        return { success: false, error: error.message };
+    }
+}
+
+// =============================================================================
+// FORM CONFIGURATION FUNCTIONS
+// =============================================================================
+
+/**
+ * Get form configuration for a structure, with fallback to defaults.
+ * Any user with access to the structure can view form configuration.
+ *
+ * @param {string} structureId - ID of the structure
+ * @returns {Promise<Object>} Form configuration object (merged with defaults)
+ */
+export async function getStructureFormConfig(structureId) {
+    try {
+        const { userUid } = await requireUser();
+
+        // Verify user has access to this structure
+        await verifyUserPermissions({ userUid, structureId });
+
+        const docRef = collections.structures().doc(structureId);
+        const docSnap = await docRef.get();
+
+        if (!docSnap.exists) {
+            logger.warn('Structure not found for form config', { structureId });
+            // Return defaults if structure doesn't exist
+            return serializeFirestoreData(DEFAULT_FORM_CONFIGURATION);
+        }
+
+        const data = docSnap.data();
+
+        // Merge structure's custom config with defaults
+        // This ensures all fields are present even if only some are customized
+        const mergedConfig = mergeWithDefaults(data.formConfiguration);
+
+        return serializeFirestoreData(mergedConfig);
+    } catch (error) {
+        logger.error('Error fetching structure form config', error, { structureId });
+        // Return defaults on error to avoid breaking the UI
+        return serializeFirestoreData(DEFAULT_FORM_CONFIGURATION);
+    }
+}
+
+/**
+ * Update form configuration for a structure.
+ * Requires Structure Admin or Super Admin.
+ *
+ * @param {string} structureId - ID of the structure
+ * @param {Object} config - Form configuration object
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function updateStructureFormConfig(structureId, config) {
+    try {
+        const { userUid } = await requireUser();
+
+        // Verify user is admin of this structure
+        await verifyStructureAdmin({ userUid, structureId });
+
+        // Validate config structure
+        if (!config || typeof config !== 'object') {
+            throw new Error('Configuration must be an object');
+        }
+
+        if (!config.sections || typeof config.sections !== 'object') {
+            throw new Error('Configuration must have a sections object');
+        }
+
+        // Validate each section
+        for (const [sectionId, sectionConfig] of Object.entries(config.sections)) {
+            // Check section exists in definitions
+            if (!SECTION_DEFINITIONS[sectionId]) {
+                throw new Error(`Unknown section: ${sectionId}`);
+            }
+
+            // Validate section structure
+            if (typeof sectionConfig.enabled !== 'boolean') {
+                throw new Error(`Section ${sectionId} must have an enabled boolean`);
+            }
+
+            if (typeof sectionConfig.order !== 'number') {
+                throw new Error(`Section ${sectionId} must have an order number`);
+            }
+
+            // Validate fields if present
+            if (sectionConfig.fields) {
+                for (const [fieldId, fieldConfig] of Object.entries(sectionConfig.fields)) {
+                    // Check field exists in section definition
+                    if (!SECTION_DEFINITIONS[sectionId].fields[fieldId]) {
+                        throw new Error(`Unknown field ${fieldId} in section ${sectionId}`);
+                    }
+
+                    // Validate visibility
+                    const validVisibilities = ['required', 'optional', 'hidden', 'conditional'];
+                    if (fieldConfig.visibility && !validVisibilities.includes(fieldConfig.visibility)) {
+                        throw new Error(`Invalid visibility "${fieldConfig.visibility}" for field ${fieldId}`);
+                    }
+
+                    // Validate options if present (must be array or null)
+                    if (fieldConfig.options !== undefined && fieldConfig.options !== null && !Array.isArray(fieldConfig.options)) {
+                        throw new Error(`Options for field ${fieldId} must be an array or null`);
+                    }
+                }
+            }
+        }
+
+        // Add version and timestamp
+        const configToSave = {
+            ...config,
+            version: config.version || 1,
+            lastUpdatedAt: new Date(),
+            lastUpdatedBy: userUid
+        };
+
+        // Update Firestore
+        await collections.structures().doc(structureId).update({
+            formConfiguration: configToSave,
+            updatedAt: new Date(),
+            updatedBy: userUid,
+        });
+
+        // Log the modification
+        await logResourceModification({
+            actorUid: userUid,
+            resourceType: 'structure',
+            resourceId: structureId,
+            action: 'update_form_config',
+            details: { sectionCount: Object.keys(config.sections).length }
+        });
+
+        logger.info('Structure form config updated', { structureId, userUid });
+
+        return { success: true };
+    } catch (error) {
+        logger.error('Error updating structure form config', error, { structureId });
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Reset structure form configuration to defaults.
+ * Requires Structure Admin or Super Admin.
+ *
+ * @param {string} structureId - ID of the structure
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function resetStructureFormConfigToDefaults(structureId) {
+    try {
+        const { userUid } = await requireUser();
+
+        // Verify user is admin of this structure
+        await verifyStructureAdmin({ userUid, structureId });
+
+        // Deep clone defaults
+        const defaultConfig = JSON.parse(JSON.stringify(DEFAULT_FORM_CONFIGURATION));
+        defaultConfig.lastUpdatedAt = new Date();
+        defaultConfig.lastUpdatedBy = userUid;
+
+        // Update Firestore
+        await collections.structures().doc(structureId).update({
+            formConfiguration: defaultConfig,
+            updatedAt: new Date(),
+            updatedBy: userUid,
+        });
+
+        // Log the modification
+        await logResourceModification({
+            actorUid: userUid,
+            resourceType: 'structure',
+            resourceId: structureId,
+            action: 'reset_form_config',
+            details: { resetToDefaults: true }
+        });
+
+        logger.info('Structure form config reset to defaults', { structureId, userUid });
+
+        return { success: true };
+    } catch (error) {
+        logger.error('Error resetting structure form config', error, { structureId });
         return { success: false, error: error.message };
     }
 }

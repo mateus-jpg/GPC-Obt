@@ -14,6 +14,7 @@ import { CACHE as CACHE_CONFIG } from '@/config/constants';
 export const CACHE_TAGS = {
   // Anagrafica
   anagrafica: (id) => `anagrafica-${id}`,
+  anagraficaData: (anagraficaId) => `anagrafica_data-${anagraficaId}`,
   anagraficaList: (structureId) => `anagrafica-list-${structureId}`,
 
   // Structures
@@ -24,6 +25,15 @@ export const CACHE_TAGS = {
 
   // Access records (services)
   accessi: (anagraficaId) => `accessi-${anagraficaId}`,
+
+  // Files
+  files: (anagraficaId) => `files-${anagraficaId}`,
+  file: (fileId) => `file-${fileId}`,
+
+  // Folders
+  folders: (anagraficaId) => `folders-${anagraficaId}`,
+  folder: (folderId) => `folder-${folderId}`,
+  folderContents: (folderId) => `folder-contents-${folderId}`,
 };
 
 /**
@@ -36,6 +46,7 @@ export const REVALIDATE = {
   anagraficaList: CACHE_CONFIG.REVALIDATE.ANAGRAFICA_LIST,
   anagraficaDetail: CACHE_CONFIG.REVALIDATE.ANAGRAFICA_DETAIL,
   accessi: CACHE_CONFIG.REVALIDATE.ACCESSI,
+  files: CACHE_CONFIG.REVALIDATE.FILES || 300, // 5 minutes default
 };
 
 /**
@@ -48,8 +59,14 @@ export function invalidateAnagraficaCaches(anagraficaId, structureIds = []) {
   // Invalidate the specific anagrafica detail cache
   revalidateTag(CACHE_TAGS.anagrafica(anagraficaId));
 
+  // Invalidate structure-specific data cache (anagrafica_data collection)
+  revalidateTag(CACHE_TAGS.anagraficaData(anagraficaId));
+
   // Invalidate accessi cache for this anagrafica
   revalidateTag(CACHE_TAGS.accessi(anagraficaId));
+
+  // Invalidate files cache for this anagrafica
+  revalidateTag(CACHE_TAGS.files(anagraficaId));
 
   // Invalidate all affected structure list caches
   for (const structureId of structureIds) {
@@ -81,6 +98,41 @@ export function invalidateUserProfileCache(userUid) {
 export function invalidateStructureCache(structureId) {
   revalidateTag(CACHE_TAGS.structure(structureId));
   revalidateTag(CACHE_TAGS.anagraficaList(structureId));
+}
+
+/**
+ * Helper to invalidate files cache for an anagrafica
+ * @param {string} anagraficaId - The anagrafica document ID
+ */
+export function invalidateFilesCache(anagraficaId) {
+  revalidateTag(CACHE_TAGS.files(anagraficaId));
+}
+
+/**
+ * Helper to invalidate a specific file cache
+ * @param {string} fileId - The file document ID
+ */
+export function invalidateFileCache(fileId) {
+  revalidateTag(CACHE_TAGS.file(fileId));
+}
+
+/**
+ * Helper to invalidate folder-related caches
+ * @param {string} anagraficaId - The anagrafica document ID
+ * @param {string[]} affectedFolderIds - Array of folder IDs that were affected
+ */
+export function invalidateFolderCaches(anagraficaId, affectedFolderIds = []) {
+  // Invalidate the folder tree for this anagrafica
+  revalidateTag(CACHE_TAGS.folders(anagraficaId));
+
+  // Invalidate specific folders and their contents
+  for (const folderId of affectedFolderIds) {
+    revalidateTag(CACHE_TAGS.folder(folderId));
+    revalidateTag(CACHE_TAGS.folderContents(folderId));
+  }
+
+  // Also invalidate files cache since folder operations may affect file visibility
+  invalidateFilesCache(anagraficaId);
 }
 
 /**

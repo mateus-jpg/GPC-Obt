@@ -7,11 +7,13 @@ import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 // Action
 import { createAnagrafica } from "@/actions/anagrafica/anagrafica";
-import { getStructureCategories, addSubcategoryToStructure } from "@/actions/admin/structure";
+import { getStructureCategories, addSubcategoryToStructure, getStructureFormConfig } from "@/actions/admin/structure";
 import { useAccessForm } from "@/hooks/useAccessForm";
 import AccessServicesForm from "@/components/Anagrafica/AccessServicesForm";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+// Form configuration context
+import { FormConfigProvider, useOrderedSections, useSectionConfig } from "@/context/FormConfigContext";
 
 // Form Components
 import PersonalInfoSection from "@/components/Anagrafica/Form/PersonalInfoSection";
@@ -35,19 +37,28 @@ export default function AnagraficaForm({ params }) {
   const [categories, setCategories] = useState(null);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
 
-  // Fetch categories on mount
+  // Form configuration state
+  const [formConfig, setFormConfig] = useState(null);
+  const [configLoading, setConfigLoading] = useState(true);
+
+  // Fetch categories and form config on mount
   useEffect(() => {
-    async function loadCategories() {
+    async function loadData() {
       try {
-        const cats = await getStructureCategories(structureId);
+        const [cats, config] = await Promise.all([
+          getStructureCategories(structureId),
+          getStructureFormConfig(structureId)
+        ]);
         setCategories(cats);
+        setFormConfig(config);
       } catch (err) {
-        console.error("Error loading categories:", err);
+        console.error("Error loading data:", err);
       } finally {
         setCategoriesLoading(false);
+        setConfigLoading(false);
       }
     }
-    loadCategories();
+    loadData();
   }, [structureId]);
 
   // Handle adding a new subcategory
@@ -197,19 +208,32 @@ export default function AnagraficaForm({ params }) {
     }
   };
 
-  return (
-    <div className="min-h-screen">
-      <div className="max-w-full mx-auto px-4">
-        <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Scheda Anagrafica
-          </h1>
-          <p className="text-gray-600">
-            Compila tutti i campi richiesti per completare la registrazione
-          </p>
+  // Show loading while config loads
+  if (configLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <p className="text-muted-foreground">Caricamento configurazione...</p>
         </div>
+      </div>
+    );
+  }
 
-        <form onSubmit={handleSubmit} className="flex flex-col lg:flex-row lg:flex-wrap gap-4 w-full">
+  return (
+    <FormConfigProvider config={formConfig}>
+      <div className="min-h-screen">
+        <div className="max-w-full mx-auto px-4">
+          <div className="mb-8 text-center">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              Scheda Anagrafica
+            </h1>
+            <p className="text-gray-600">
+              Compila tutti i campi richiesti per completare la registrazione
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="flex flex-col lg:flex-row lg:flex-wrap gap-4 w-full">
           {/* Each card section */}
           <div className="w-full lg:w-[calc(50%-8px)] min-w-0">
             <PersonalInfoSection formData={formData} handleChange={handleChange} />
@@ -255,6 +279,8 @@ export default function AnagraficaForm({ params }) {
                   <AccessServicesForm
                     state={accessState}
                     onChange={updateAccessField}
+                    showClassification={true}
+                    showReferralEntity={true}
                     categories={categories}
                     onNewSubcategory={handleNewSubcategory}
                   />
@@ -284,17 +310,18 @@ export default function AnagraficaForm({ params }) {
 
         </form>
 
-        <PostAccessDialog
-          open={showPostDialog}
-          payload={lastPayload}
-          onDone={() => {
-            setShowPostDialog(false);
-            if (redirectId) {
-              router.push(`/${structureId}/anagrafica/${redirectId}`);
-            }
-          }}
-        />
-      </div >
-    </div >
+          <PostAccessDialog
+            open={showPostDialog}
+            payload={lastPayload}
+            onDone={() => {
+              setShowPostDialog(false);
+              if (redirectId) {
+                router.push(`/${structureId}/anagrafica/${redirectId}`);
+              }
+            }}
+          />
+        </div>
+      </div>
+    </FormConfigProvider>
   );
 }

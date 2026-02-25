@@ -223,7 +223,7 @@ export default function EditAnagraficaPage() {
     const fetchAnagrafica = async () => {
       try {
         setIsLoading(true);
-        const dataStr = await getAnagrafica(id);
+        const dataStr = await getAnagrafica(id, structureId);
         const data = JSON.parse(dataStr);
         setFormData(transformApiDataToFormState(data));
       } catch (err) {

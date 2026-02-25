@@ -1,23 +1,26 @@
-import { notFound } from "next/navigation";
+import { ArrowLeft, FolderOpen, PencilIcon } from "lucide-react";
 import { headers } from "next/headers";
 import Link from "next/link";
-import { Card, CardHeader, CardTitle, CardContent, } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, PencilIcon } from "lucide-react";
-import Otherinfo from "@/components/Anagrafica/Otherinfo";
-import HistoryTimeline from "@/components/Anagrafica/HistoryTimeline";
-import admin from "@/lib/firebase/firebaseAdmin";
-
-import { Status, StatusIndicator } from '@/components/ui/shadcn-io/status';
-import { Button } from "@/components/ui/button";
-import AccessDialog from "@/components/Anagrafica/AccessDialog/AccessDialog";
+import { notFound } from "next/navigation";
 import { getAccessAction } from "@/actions/anagrafica/access";
-import AccessInfo from "@/components/Anagrafica/AccessInfo";
 import { getAnagrafica } from "@/actions/anagrafica/anagrafica";
+import AccessDialog from "@/components/Anagrafica/AccessDialog/AccessDialog";
+import AccessInfo from "@/components/Anagrafica/AccessInfo";
+import DownloadPdfButton from "@/components/Anagrafica/DownloadPdfButton";
+import HistoryTimeline from "@/components/Anagrafica/HistoryTimeline";
+import Otherinfo from "@/components/Anagrafica/Otherinfo";
+import OtherStructuresInfo from "@/components/Anagrafica/OtherStructuresInfo";
+import ReminderDialog from "@/components/Anagrafica/ReminderDialog";
+import { ShareAnagraficaDialog } from "@/components/Anagrafica/ShareAnagraficaDialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Status, StatusIndicator } from "@/components/ui/shadcn-io/status";
+import admin from "@/lib/firebase/firebaseAdmin";
 
 async function canUserAccess(anagrafica, userID) {
   const db = admin.firestore();
-  const userRef = db.collection('operators').doc(userID);
+  const userRef = db.collection("operators").doc(userID);
   const userDoc = await userRef.get();
   const userData = userDoc.data();
   const userStructureIds = userData?.structureIds || [];
@@ -26,9 +29,7 @@ async function canUserAccess(anagrafica, userID) {
     return false;
   }
 
-  return canBeAccessedBy.some(id =>
-    userStructureIds.includes(id)
-  );
+  return canBeAccessedBy.some((id) => userStructureIds.includes(id));
 }
 
 export default async function AnagraficaViewPage({ params }) {
@@ -36,7 +37,7 @@ export default async function AnagraficaViewPage({ params }) {
   const headersList = await headers();
 
   // Get user info from middleware
-  const userUid = headersList.get('x-user-uid');
+  const userUid = headersList.get("x-user-uid");
 
   if (!userUid) {
     return notFound();
@@ -45,10 +46,10 @@ export default async function AnagraficaViewPage({ params }) {
   // Use cached server action instead of fetch with no-store
   let anagrafica = null;
   try {
-    const anagraficaJson = await getAnagrafica(id);
+    const anagraficaJson = await getAnagrafica(id, structureId);
     anagrafica = JSON.parse(anagraficaJson);
   } catch (error) {
-    console.error('Error fetching anagrafica:', error);
+    console.error("Error fetching anagrafica:", error);
     return notFound();
   }
 
@@ -59,7 +60,7 @@ export default async function AnagraficaViewPage({ params }) {
     return notFound();
   }
 
-  if (!await canUserAccess(anagrafica, userUid)) {
+  if (!(await canUserAccess(anagrafica, userUid))) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Card className="max-w-md">
@@ -77,20 +78,23 @@ export default async function AnagraficaViewPage({ params }) {
   }
 
   return (
-
     <div className="w-full mx-auto px-4">
       {/* Header */}
       <div className="mb-4">
         <div className="flex items-center justify-between px-2">
-          <div className="capitalize flex gap-6" >
+          <div className="capitalize flex gap-6">
             <h1 className="text-3xl font-bold flex items-center align-middle gap-2  text-gray-900">
-              {/*  <IconUser className="w-6 h-6" />  */}{anagrafica.anagrafica?.nome} {anagrafica.anagrafica?.cognome}
+              {/*  <IconUser className="w-6 h-6" />  */}
+              {anagrafica.anagrafica?.nome} {anagrafica.anagrafica?.cognome}
             </h1>
             {anagrafica.vulnerabilita?.vulnerabilita?.length > 0 && (
               <Status status="offline">
                 <StatusIndicator className="w-3 h-3" />
-                <h3 className="text-sm font-medium text-red-600">Presenti vulnerabilita</h3>
-              </Status>)}
+                <h3 className="text-sm font-medium text-red-600">
+                  Presenti vulnerabilita
+                </h3>
+              </Status>
+            )}
 
             {/*   <p className="text-gray-600 mt-1">
                 Scheda Anagrafica - ID: {id}
@@ -111,12 +115,13 @@ export default async function AnagraficaViewPage({ params }) {
                 1
               </span>
               <div className="flex items-center gap-2 flex-row">
-
                 {/* <UserRound className="w-5 h-5" /> */}
-
                 Informazioni Anagrafiche
               </div>
-              <Link href={`/${structureId}/anagrafica/${anagrafica.id}/edit`} className="border-1 border-gray-300 rounded-md p-1 transition-all hover:shadow-sm hover:bg-gray-300 flex items-center">
+              <Link
+                href={`/${structureId}/anagrafica/${anagrafica.id}/edit`}
+                className="border-1 border-gray-300 rounded-md p-1 transition-all hover:shadow-sm hover:bg-gray-300 flex items-center"
+              >
                 <PencilIcon className="w-6 h-6 text-gray-600 hover:text-gray-900" />
               </Link>
             </CardTitle>
@@ -127,24 +132,31 @@ export default async function AnagraficaViewPage({ params }) {
             <DataRow label="Sesso" value={anagrafica.anagrafica?.sesso} />
             <DataRow
               label="Data di nascita"
-              value={anagrafica.anagrafica?.dataDiNascita ? formatTimestamp(anagrafica.anagrafica.dataDiNascita) : '-'}
+              value={
+                anagrafica.anagrafica?.dataDiNascita
+                  ? formatTimestamp(anagrafica.anagrafica.dataDiNascita)
+                  : "-"
+              }
             />
-            <DataRow label="Luogo di nascita" value={anagrafica.anagrafica?.luogoDiNascita} />
+            <DataRow
+              label="Luogo di nascita"
+              value={anagrafica.anagrafica?.luogoDiNascita}
+            />
             <DataRow
               label="Cittadinanza"
-              value={anagrafica.anagrafica?.cittadinanza?.join(', ') || '-'}
+              value={anagrafica.anagrafica?.cittadinanza?.join(", ") || "-"}
             />
-            <DataRow label="Comune di domicilio" value={anagrafica.anagrafica?.comuneDiDomicilio} />
+            <DataRow
+              label="Comune di domicilio"
+              value={anagrafica.anagrafica?.comuneDiDomicilio}
+            />
 
             <DataRow label="Telefono" value={anagrafica.anagrafica?.telefono} />
             <DataRow label="Email" value={anagrafica.anagrafica?.email} />
           </CardContent>
         </Card>
-
-
       </div>
       <div className="flex justify-between items-center mt-4">
-
         <Button variant="outline" asChild className="">
           <Link href={`/${structureId}/anagrafica`}>
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -152,40 +164,80 @@ export default async function AnagraficaViewPage({ params }) {
           </Link>
         </Button>
         <div className="flex gap-2">
+          <Button variant="outline" asChild>
+            <Link href={`/${structureId}/anagrafica/${anagrafica.id}/files`}>
+              <FolderOpen className="w-4 h-4 mr-2" />
+              Files & Documents
+            </Link>
+          </Button>
+          <ReminderDialog
+            anagraficaId={anagrafica.id}
+            structureId={structureId}
+          />
+          <DownloadPdfButton
+            anagrafica={anagrafica}
+            accesses={anagraficaAccesses?.accessi || []}
+            anagraficaId={anagrafica.id}
+            structureId={structureId}
+          />
+          <ShareAnagraficaDialog
+            anagraficaId={anagrafica.id}
+            structureId={structureId}
+            anagraficaName={`${anagrafica.anagrafica?.nome || ""} ${anagrafica.anagrafica?.cognome || ""}`.trim()}
+          />
           {/* <EventDialog anagraficaId={anagrafica.id} structureId={structureId} /> */}
-          <AccessDialog anagraficaId={anagrafica.id} structureId={structureId} />
+          <AccessDialog
+            anagraficaId={anagrafica.id}
+            structureId={structureId}
+          />
         </div>
       </div>
+
+      {/* Other Info Section */}
       <Otherinfo anagrafica={anagrafica} />
+
+      {/* Cross-Structure Data Display */}
+      {anagrafica.otherStructuresData &&
+        anagrafica.otherStructuresData.length > 0 && (
+          <OtherStructuresInfo
+            otherStructuresData={anagrafica.otherStructuresData}
+          />
+        )}
+
       {anagraficaAccesses && (
         <AccessInfo accesses={anagraficaAccesses.accessi} />
       )}
 
       {/* History Section */}
       <div className="mt-6">
-        <HistoryTimeline anagraficaId={anagrafica.id} />
+        <HistoryTimeline
+          anagraficaId={anagrafica.id}
+          structureId={structureId}
+        />
       </div>
     </div>
-
   );
 }
 
 // Helper component for displaying data rows
 
-
 const formatTimestamp = (ts, includeTime = false) => {
-  if (!ts?._seconds) return '';
+  if (!ts?._seconds) return "";
   const date = new Date(ts._seconds * 1000);
-  return includeTime ? date.toLocaleString('it-IT') : date.toLocaleDateString('it-IT');
+  return includeTime
+    ? date.toLocaleString("it-IT")
+    : date.toLocaleDateString("it-IT");
 };
 
 function DataRow({ label, value, small = false }) {
-  const textSize = small ? 'text-sm' : 'text-base';
+  const textSize = small ? "text-sm" : "text-base";
 
   return (
     <div className={`flex flex-col ${textSize}`}>
-      <span className="text-sm text-muted-foreground flex items-center gap-2">{label}</span>
-      <span className="text-gray-900 font-medium ">{value || '-'}</span>
+      <span className="text-sm text-muted-foreground flex items-center gap-2">
+        {label}
+      </span>
+      <span className="text-gray-900 font-medium ">{value || "-"}</span>
     </div>
   );
 }

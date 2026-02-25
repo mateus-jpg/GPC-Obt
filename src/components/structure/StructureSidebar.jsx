@@ -20,7 +20,8 @@ import {
   IconCategoryPlus,
   IconUsers,
   IconBell,
-  IconInfoCircle
+  IconInfoCircle,
+  IconAdjustmentsHeart
 } from "@tabler/icons-react"
 
 import { NavDocuments } from "@/components/nav-documents"
@@ -119,10 +120,15 @@ const data = {
       icon: IconUsersGroup,
     },
     {
-      title: "Gestione Categorie",
+      title: "Gestione Categorie Accessi",
       url: "admin/categories",
       icon: IconCategoryPlus,
     },
+    {
+      title: "Gestione Modulo Anagrafica",
+      url: "admin/form-config",
+      icon: IconAdjustmentsHeart,
+    }
     
   ]
   ,
@@ -165,7 +171,7 @@ const data = {
 export function StructureSidebar({
   ...props
 }) {
-  const { user, loading, availableStructures, currentStructure, setCurrentStructure } = useAuth();
+  const { user, loading, availableStructures, availableProjects, currentStructure, setCurrentStructure } = useAuth();
   const {structureId} = useParams();
 
 
@@ -196,7 +202,7 @@ export function StructureSidebar({
           </SidebarMenuItem>
           <SidebarMenuItem>
 
-            {availableStructures ? <StructureSwitcher structures={availableStructures} selectedStructure={currentStructure} user={user} /> :
+            {availableStructures ? <StructureSwitcher structures={availableStructures} projects={availableProjects} selectedStructure={currentStructure} user={user} /> :
             <Skeleton variant="rectangular" width={210} height={40} className="rounded-lg" />
             }
           </SidebarMenuItem>

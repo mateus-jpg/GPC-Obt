@@ -1,6 +1,6 @@
 "use client"
 import * as React from "react"
-import { ChevronsUpDown, Plus, Settings } from "lucide-react"
+import { ChevronsUpDown, Plus, Settings, FolderOpen, Building2 } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,6 +8,9 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
   SidebarMenu,
@@ -19,7 +22,8 @@ import { useSWRConfig } from "swr"
 import { clearStructureCache } from "@/lib/swr-config"
 
 import { useRouter } from "next/navigation"
-export function StructureSwitcher({ structures, selectedStructure, user }) {
+
+export function StructureSwitcher({ structures, projects = [], selectedStructure, user }) {
   const { isMobile } = useSidebar()
   const router = useRouter()
   const { mutate } = useSWRConfig()
@@ -31,11 +35,45 @@ export function StructureSwitcher({ structures, selectedStructure, user }) {
   }
 
   const isAdmin = user?.role === 'admin'
+  const isProjectAdmin = projects.some(p => p.admins?.includes(user?.uid))
+
+  // Group structures by project
+  const groupedStructures = React.useMemo(() => {
+    const groups = new Map()
+    const noProjectStructures = []
+
+    structures.forEach(structure => {
+      if (structure.projectId) {
+        const project = projects.find(p => p.id === structure.projectId)
+        if (project) {
+          if (!groups.has(project.id)) {
+            groups.set(project.id, {
+              project,
+              structures: []
+            })
+          }
+          groups.get(project.id).structures.push(structure)
+        } else {
+          noProjectStructures.push(structure)
+        }
+      } else {
+        noProjectStructures.push(structure)
+      }
+    })
+
+    return {
+      byProject: Array.from(groups.values()),
+      noProject: noProjectStructures
+    }
+  }, [structures, projects])
+
+  const hasProjects = groupedStructures.byProject.length > 0
 
   let activeStructure = selectedStructure
   if (!selectedStructure) {
     activeStructure = { name: "seleziona struttura" }
   }
+
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -45,11 +83,13 @@ export function StructureSwitcher({ structures, selectedStructure, user }) {
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-            {/*   <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                <Logo className="!size-8" size={89} />
-              </div> */}
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{activeStructure.name}</span>
+                {selectedStructure?.projectId && (
+                  <span className="truncate text-xs text-muted-foreground">
+                    {projects.find(p => p.id === selectedStructure.projectId)?.name}
+                  </span>
+                )}
               </div>
               <ChevronsUpDown className="ml-auto" />
             </SidebarMenuButton>
@@ -63,36 +103,84 @@ export function StructureSwitcher({ structures, selectedStructure, user }) {
             <DropdownMenuLabel className="text-muted-foreground text-xs">
               Strutture
             </DropdownMenuLabel>
-            {structures.map((structure) => (
-              <DropdownMenuItem
-                key={structure.id}
-                onClick={() => handleStructureChange(structure.id)}
-                className="gap-2 p-2"
-              >
-                {structure.name}
-              </DropdownMenuItem>
+
+            {/* Structures grouped by project */}
+            {hasProjects && groupedStructures.byProject.map(({ project, structures: projectStructures }) => (
+              <DropdownMenuSub key={project.id}>
+                <DropdownMenuSubTrigger className="gap-2 p-2">
+                  <FolderOpen className="size-4 text-muted-foreground" />
+                  <span className="font-medium">{project.name}</span>
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {projectStructures.length}
+                  </span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {projectStructures.map((structure) => (
+                    <DropdownMenuItem
+                      key={structure.id}
+                      onClick={() => handleStructureChange(structure.id)}
+                      className="gap-2 p-2"
+                    >
+                      <Building2 className="size-4 text-muted-foreground" />
+                      {structure.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
             ))}
-            {isAdmin && (
+
+            {/* Structures without project */}
+            {groupedStructures.noProject.length > 0 && (
+              <>
+                {hasProjects && <DropdownMenuSeparator />}
+                {groupedStructures.noProject.map((structure) => (
+                  <DropdownMenuItem
+                    key={structure.id}
+                    onClick={() => handleStructureChange(structure.id)}
+                    className="gap-2 p-2"
+                  >
+                    <Building2 className="size-4 text-muted-foreground" />
+                    {structure.name}
+                  </DropdownMenuItem>
+                ))}
+              </>
+            )}
+
+            {/* Admin actions */}
+            {(isAdmin || isProjectAdmin) && (
               <>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="gap-2 p-2"
-                  onClick={() => router.push("/admin/structures/new")}
-                >
-                  <div className="flex size-6 items-center justify-center rounded-md border bg-transparent">
-                    <Plus className="size-4" />
-                  </div>
-                  <div className="font-medium">Crea struttura</div>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="gap-2 p-2"
-                  onClick={() => router.push("/admin/structures")}
-                >
-                  <div className="flex size-6 items-center justify-center rounded-md border bg-transparent">
-                    <Settings className="size-4" />
-                  </div>
-                  <div className="font-medium">Gestisci strutture</div>
-                </DropdownMenuItem>
+                {isAdmin && (
+                  <>
+                    <DropdownMenuItem
+                      className="gap-2 p-2"
+                      onClick={() => router.push("/admin/projects")}
+                    >
+                      <div className="flex size-6 items-center justify-center rounded-md border bg-transparent">
+                        <FolderOpen className="size-4" />
+                      </div>
+                      <div className="font-medium">Gestisci progetti</div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="gap-2 p-2"
+                      onClick={() => router.push("/admin/structures/new")}
+                    >
+                      <div className="flex size-6 items-center justify-center rounded-md border bg-transparent">
+                        <Plus className="size-4" />
+                      </div>
+                      <div className="font-medium">Crea struttura</div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="gap-2 p-2"
+                      onClick={() => router.push("/admin/structures")}
+                    >
+                      <div className="flex size-6 items-center justify-center rounded-md border bg-transparent">
+                        <Settings className="size-4" />
+                      </div>
+                      <div className="font-medium">Gestisci strutture</div>
+                    </DropdownMenuItem>
+                  </>
+                )}
               </>
             )}
           </DropdownMenuContent>
@@ -101,4 +189,3 @@ export function StructureSwitcher({ structures, selectedStructure, user }) {
     </SidebarMenu>
   )
 }
-

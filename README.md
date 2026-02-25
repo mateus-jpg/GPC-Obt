@@ -14,6 +14,8 @@ Il progetto è costruito con un moderno stack tecnologico basato su React e Next
 *   **Admin SDK**: `firebase-admin` per operazioni server-side sicure
 *   **Middleware Auth**: Custom middleware per gestione sessioni e protezione rotte
 
+> Puoi trovare maggiori informazioni in /docs
+
 ## 🛠️ Prerequisiti
 
 Prima di iniziare, assicurati di avere installato:

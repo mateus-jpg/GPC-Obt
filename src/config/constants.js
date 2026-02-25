@@ -44,6 +44,7 @@ export const CACHE = {
     ANAGRAFICA_LIST: 60,      // 1 minute
     ANAGRAFICA_DETAIL: 120,   // 2 minutes
     ACCESSI: 60,              // 1 minute
+    FILES: 300,               // 5 minutes
   },
 };
 
@@ -126,6 +127,19 @@ export const FILE = {
   SIGNED_URL_EXPIRY: TIME.HOUR,      // 1 hour
 };
 
+// File categories for organization
+export const FILE_CATEGORIES = {
+  DOCUMENT: 'document',           // General documents
+  IDENTITY: 'identity',           // ID cards, passports
+  LEGAL: 'legal',                 // Legal documents
+  MEDICAL: 'medical',             // Medical records
+  EMPLOYMENT: 'employment',       // Work-related docs
+  EDUCATION: 'education',         // Educational certificates
+  HOUSING: 'housing',             // Housing documents
+  FINANCIAL: 'financial',         // Financial documents
+  OTHER: 'other',                 // Uncategorized
+};
+
 // ============================================================================
 // UI PREFERENCES
 // ============================================================================
@@ -163,6 +177,8 @@ export const COLLECTIONS = {
   STRUCTURES: 'structures',
   ANAGRAFICA: 'anagrafica',
   ACCESSI: 'accessi',
+  FILES: 'files',
+  FOLDERS: 'folders',
   REMINDERS: 'reminders',
   AUDIT_LOGS: 'audit_logs',
 };

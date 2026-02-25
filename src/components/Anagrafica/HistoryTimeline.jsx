@@ -91,11 +91,11 @@ function formatDate(dateValue) {
     }
 }
 
-export function HistoryTimeline({ anagraficaId }) {
+export function HistoryTimeline({ anagraficaId, structureId = null }) {
     const [entries, setEntries] = useState([])
     const [loading, setLoading] = useState(true)
     const [hasMore, setHasMore] = useState(false)
-    const [lastId, setLastId] = useState(null)
+    const [lastTimestamp, setLastTimestamp] = useState(null)
     const [loadingMore, setLoadingMore] = useState(false)
     const [error, setError] = useState(null)
 
@@ -105,11 +105,12 @@ export function HistoryTimeline({ anagraficaId }) {
             setLoading(true)
             setError(null)
             try {
-                const result = await getAnagraficaHistory(anagraficaId, 20)
+                // API: getAnagraficaHistory(anagraficaId, structureId, limit, startAfterTimestamp)
+                const result = await getAnagraficaHistory(anagraficaId, structureId, 20, null)
                 const data = JSON.parse(result)
                 setEntries(data.entries || [])
                 setHasMore(data.hasMore || false)
-                setLastId(data.lastId)
+                setLastTimestamp(data.lastTimestamp)
             } catch (err) {
                 console.error("Error loading history:", err)
                 setError("Errore durante il caricamento della cronologia")
@@ -118,18 +119,18 @@ export function HistoryTimeline({ anagraficaId }) {
             }
         }
         loadHistory()
-    }, [anagraficaId])
+    }, [anagraficaId, structureId])
 
     // Load more entries
     const loadMore = async () => {
         if (loadingMore || !hasMore) return
         setLoadingMore(true)
         try {
-            const result = await getAnagraficaHistory(anagraficaId, 20, lastId)
+            const result = await getAnagraficaHistory(anagraficaId, structureId, 20, lastTimestamp)
             const data = JSON.parse(result)
             setEntries(prev => [...prev, ...(data.entries || [])])
             setHasMore(data.hasMore || false)
-            setLastId(data.lastId)
+            setLastTimestamp(data.lastTimestamp)
         } catch (err) {
             console.error("Error loading more history:", err)
         } finally {
@@ -285,6 +286,13 @@ function HistoryEntry({ entry }) {
     )
 }
 
+function isEmptyValue(value) {
+    if (value === null || value === undefined) return true
+    if (value === "" || value === 0) return true
+    if (Array.isArray(value) && value.length === 0) return true
+    return false
+}
+
 function GroupChanges({ groupName, before, after }) {
     // Get all unique keys from both before and after
     const allKeys = new Set([
@@ -293,10 +301,16 @@ function GroupChanges({ groupName, before, after }) {
     ])
 
     // Filter to only show fields that actually changed
+    // Also include fields that went from empty to a value or vice versa
     const changedFields = Array.from(allKeys).filter(key => {
-        const beforeVal = JSON.stringify(before?.[key])
-        const afterVal = JSON.stringify(after?.[key])
-        return beforeVal !== afterVal
+        const beforeVal = before?.[key]
+        const afterVal = after?.[key]
+
+        // Skip if both are empty/meaningless
+        if (isEmptyValue(beforeVal) && isEmptyValue(afterVal)) return false
+
+        // Show if values are different (including empty-to-value transitions)
+        return JSON.stringify(beforeVal) !== JSON.stringify(afterVal)
     })
 
     if (changedFields.length === 0) {

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
+import { useParams } from "next/navigation";
 import {
   Accordion,
   AccordionContent,
@@ -10,7 +11,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MaterialReactTable } from "material-react-table";
 import Link from "next/link";
-import { FileIcon } from "lucide-react";
+import { FileIcon, ExternalLink } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -23,6 +24,9 @@ import { getAccessFileUrl } from "@/actions/anagrafica/access";
 
 export default function AccessInfo({ accesses }) {
   if (!accesses) return null;
+
+  const params = useParams();
+  const structureId = params?.structureId;
 
   // Remove the async/await - accesses is already resolved data
   const [data, setData] = React.useState([]);
@@ -64,6 +68,25 @@ export default function AccessInfo({ accesses }) {
 
   const columns = useMemo(
     () => [
+      {
+        id: "detailLink",
+        header: "",
+        size: 48,
+        enableSorting: false,
+        Cell: ({ row }) => {
+          const { accessId, anagraficaId } = row.original;
+          if (!accessId || !anagraficaId || !structureId) return null;
+          return (
+            <a
+              href={`/${structureId}/anagrafica/${anagraficaId}/accessi/${accessId}`}
+              className="flex items-center justify-center text-muted-foreground hover:text-primary transition-colors"
+              title="Apri dettaglio accesso"
+            >
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          );
+        },
+      },
       {
         accessorKey: "tipoAccesso",
         header: "Tipo Accesso",
