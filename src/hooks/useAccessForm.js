@@ -2,55 +2,84 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { AccessTypes as DefaultAccessTypes } from '@/components/Anagrafica/AccessDialog/AccessTypes';
 import { convertFileToBase64 } from '@/utils/fileUtils';
 
-/**
- * Creates initial form state from a list of categories
- */
+function createBlankTypeState() {
+    return {
+        subCategories: [],
+        altroText: "",
+        content: "",           // rich-text notes (HTML)
+        files: [],             // new files to upload
+        existingFiles: [],     // files already in storage
+        deletedFilePaths: [],  // storage paths marked for deletion on save
+        classification: "",
+        referralEntity: "",
+        reminderDate: null,
+        reminderTime: "",
+    };
+}
+
 function createInitialState(categories) {
     return (categories || DefaultAccessTypes).reduce((acc, type) => {
-        acc[type.value] = {
-            subCategories: [],
-            altroText: "",
-            content: "", // notes
-            files: [],
-            classification: "",
-            referralEntity: "",
-            reminderDate: null,
-            reminderTime: "",
-        };
+        acc[type.value] = createBlankTypeState();
         return acc;
     }, {});
 }
 
-export function useAccessForm(categories = null) {
-    // Use provided categories or fall back to defaults
+/**
+ * Map existing services array (from Firestore) into the tab-keyed form state.
+ * tipoAccesso is stored as the label string (e.g. "Legale"), matched against category labels.
+ */
+function mapInitialDataToState(categories, initialData) {
+    const state = createInitialState(categories);
+
+    for (const svc of (initialData || [])) {
+        const matchedType = (categories || DefaultAccessTypes).find(
+            t => t.label === svc.tipoAccesso || t.value === svc.tipoAccesso
+        );
+        if (!matchedType) continue;
+
+        state[matchedType.value] = {
+            subCategories: Array.isArray(svc.sottoCategorie)
+                ? svc.sottoCategorie
+                : svc.sottoCategorie ? [svc.sottoCategorie] : [],
+            altroText: svc.altro || "",
+            content: svc.note || "",
+            files: [],
+            existingFiles: Array.isArray(svc.files) ? svc.files : [],
+            deletedFilePaths: [],
+            classification: svc.classificazione || "",
+            referralEntity: svc.enteRiferimento || "",
+            reminderDate: svc.reminderDate ? new Date(svc.reminderDate) : null,
+            reminderTime: svc.reminderDate
+                ? new Date(svc.reminderDate).toTimeString().slice(0, 5)
+                : "",
+        };
+    }
+
+    return state;
+}
+
+export function useAccessForm(categories = null, initialData = null) {
     const accessTypes = useMemo(() => {
         return categories && categories.length > 0 ? categories : DefaultAccessTypes;
     }, [categories]);
 
-    const [accessState, setAccessState] = useState(() => createInitialState(accessTypes));
+    const [accessState, setAccessState] = useState(() =>
+        initialData && initialData.length > 0
+            ? mapInitialDataToState(accessTypes, initialData)
+            : createInitialState(accessTypes)
+    );
 
-    // Update state when categories change (add new category types)
+    // Add slots for newly added category types (e.g. after a custom subcategory is added)
     useEffect(() => {
         setAccessState((prevState) => {
             const newState = { ...prevState };
             let hasChanges = false;
-
             for (const type of accessTypes) {
                 if (!newState[type.value]) {
-                    newState[type.value] = {
-                        subCategories: [],
-                        altroText: "",
-                        content: "",
-                        files: [],
-                        classification: "",
-                        referralEntity: "",
-                        reminderDate: null,
-                        reminderTime: "",
-                    };
+                    newState[type.value] = createBlankTypeState();
                     hasChanges = true;
                 }
             }
-
             return hasChanges ? newState : prevState;
         });
     }, [accessTypes]);
@@ -58,16 +87,33 @@ export function useAccessForm(categories = null) {
     const updateAccessField = useCallback((typeVal, field, value) => {
         setAccessState((prev) => ({
             ...prev,
-            [typeVal]: {
-                ...prev[typeVal],
-                [field]: value,
-            },
+            [typeVal]: { ...prev[typeVal], [field]: value },
         }));
     }, []);
 
+    /** Mark an existing file for deletion on next save. Removes it from existingFiles immediately. */
+    const markFileForDeletion = useCallback((typeVal, filePath) => {
+        setAccessState((prev) => {
+            const current = prev[typeVal];
+            if (!current) return prev;
+            return {
+                ...prev,
+                [typeVal]: {
+                    ...current,
+                    deletedFilePaths: [...current.deletedFilePaths, filePath],
+                    existingFiles: current.existingFiles.filter(f => f.path !== filePath),
+                }
+            };
+        });
+    }, []);
+
     const resetAccessForm = useCallback(() => {
-        setAccessState(createInitialState(accessTypes));
-    }, [accessTypes]);
+        setAccessState(
+            initialData && initialData.length > 0
+                ? mapInitialDataToState(accessTypes, initialData)
+                : createInitialState(accessTypes)
+        );
+    }, [accessTypes, initialData]);
 
     const isAccessTypeValid = useCallback((typeVal) => {
         const s = accessState[typeVal];
@@ -87,16 +133,20 @@ export function useAccessForm(categories = null) {
         const validTypes = getValidAccessTypes();
         return await Promise.all(validTypes.map(async (type) => {
             const state = accessState[type.value];
-            const cleanedState = {
-                tipoAccesso: type.label,
-            };
+            const cleanedState = { tipoAccesso: type.label };
+
             if (state.subCategories.length > 0) cleanedState.sottoCategorie = state.subCategories;
-            if (state.subCategories.includes("Altro") && state.altroText.trim() !== "")
+            if (state.subCategories.includes("Altro") && state.altroText.trim())
                 cleanedState.altro = state.altroText.trim();
-            if (state.content.trim() !== "") cleanedState.note = state.content.trim();
+            if (state.content.trim()) cleanedState.note = state.content.trim();
             if (state.classification) cleanedState.classificazione = state.classification;
             if (state.referralEntity) cleanedState.enteRiferimento = state.referralEntity;
 
+            // Pass existing files and deletion list to the server action
+            cleanedState.existingFiles = state.existingFiles || [];
+            cleanedState.deletedFilePaths = state.deletedFilePaths || [];
+
+            // New files to upload
             if (state.files.length > 0) {
                 cleanedState.files = await Promise.all(state.files.map(async (f) => {
                     const base64 = await convertFileToBase64(f.file);
@@ -109,6 +159,8 @@ export function useAccessForm(categories = null) {
                         size: f.file.size
                     };
                 }));
+            } else {
+                cleanedState.files = [];
             }
 
             if (state.reminderDate) {
@@ -127,6 +179,7 @@ export function useAccessForm(categories = null) {
     return {
         accessState,
         updateAccessField,
+        markFileForDeletion,
         resetAccessForm,
         isAccessTypeValid,
         getValidAccessTypes,
