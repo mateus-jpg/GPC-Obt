@@ -44,8 +44,9 @@ export default function DownloadPdfButton({
 
       const nome = anagrafica?.anagrafica?.nome || "anagrafica";
       const cognome = anagrafica?.anagrafica?.cognome || "";
+      const namePart = [nome, cognome].filter(Boolean).join("-");
       const filename =
-        `scheda-${nome}-${cognome}-${new Date().toISOString().slice(0, 10)}.pdf`
+        `scheda-${namePart}-${new Date().toISOString().slice(0, 10)}.pdf`
           .toLowerCase()
           .replace(/\s+/g, "-");
 

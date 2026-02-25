@@ -30,6 +30,13 @@ function formatFirestoreTimestamp(ts) {
       locale: it,
     });
   }
+  if (typeof ts === "string") {
+    try {
+      return format(new Date(ts), "dd/MM/yyyy", { locale: it });
+    } catch {
+      return "-";
+    }
+  }
   return "-";
 }
 

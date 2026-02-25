@@ -113,6 +113,7 @@ export default function ReminderDialog({ anagraficaId, structureId }) {
     <Dialog
       open={open}
       onOpenChange={(v) => {
+        if (loading) return;
         setOpen(v);
         if (!v) handleReset();
       }}

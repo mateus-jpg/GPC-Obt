@@ -55,6 +55,10 @@ export async function createReminderAction(payload) {
     anagraficaData.canBeAccessedBy || anagraficaData.structureIds || [];
   await verifyUserPermissions({ userUid, allowedStructures });
 
+  if (!allowedStructures.includes(structureId)) {
+    throw new Error("Forbidden: structureId not allowed for this anagrafica");
+  }
+
   // Handle optional file upload
   let uploadedFile = null;
   if (file?.base64) {
