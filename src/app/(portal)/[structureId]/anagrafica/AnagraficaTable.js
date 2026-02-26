@@ -86,15 +86,15 @@ const columnsDef = [
     id: 'anagrafica',
     header: 'Informazioni Anagrafiche',
     columns: [
-      { accessorKey: 'anagrafica.nome', header: 'Nome (solo)', enableHiding: true },
-      { accessorKey: 'anagrafica.cognome', header: 'Cognome', enableHiding: true },
-      {
+      { accessorKey: 'anagrafica.cognome', header: 'Cognome', enableHiding: false },
+      { accessorKey: 'anagrafica.nome', header: 'Nome', enableHiding: false },
+      /* {
         accessorFn: (row) => `${row.anagrafica?.nome || ''} ${row.anagrafica?.cognome || ''}`.trim(),
         id: 'nome_completo',
         header: 'Nome',
         size: 150,
         enableHiding: false
-      },
+      }, */
       { accessorKey: 'anagrafica.sesso', header: 'Sesso', size: 100 },
       {
         accessorKey: 'anagrafica.dataDiNascita',
@@ -282,8 +282,8 @@ export function AnagraficaTable({ rows, structureId }) {
           density: 'compact',
           columnVisibility: {
             id: false,
-            'anagrafica.nome': false,
-            'anagrafica.cognome': false,
+/*             'anagrafica.nome': true,
+            'anagrafica.cognome': false, */
             'vulnerabilita.intenzioneItalia': false,
             'lavoroFormazione.titoloDiStudioOrigine': false,
             'lavoroFormazione.titoloDiStudioItalia': false,

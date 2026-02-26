@@ -246,7 +246,7 @@ async function updateReminderStats(docRef, reminderData, isNew, wasCompleted, is
 // ============================================================================
 
 exports.onAnagraficaCreate = onDocumentCreated(
-  { document: "anagrafica/{personId}", region: "europe-west8" },
+  { document: "anagrafica/{personId}", region: "europe-west1" },
   async (event) => {
     const data = event.data?.data();
     if (!data) return;
@@ -267,7 +267,7 @@ exports.onAnagraficaCreate = onDocumentCreated(
 );
 
 exports.onAnagraficaUpdate = onDocumentUpdated(
-  { document: "anagrafica/{personId}", region: "europe-west8" },
+  { document: "anagrafica/{personId}", region: "europe-west1" },
   async (event) => {
     const beforeData = event.data?.before?.data();
     const afterData = event.data?.after?.data();
@@ -338,7 +338,7 @@ exports.onAnagraficaUpdate = onDocumentUpdated(
 // ============================================================================
 
 exports.onAnagraficaDataCreate = onDocumentCreated(
-  { document: "anagrafica_data/{dataId}", region: "europe-west8" },
+  { document: "anagrafica_data/{dataId}", region: "europe-west1" },
   async (event) => {
     const data = event.data?.data();
     if (!data || !data.structureId) return;
@@ -356,7 +356,7 @@ exports.onAnagraficaDataCreate = onDocumentCreated(
 );
 
 exports.onAnagraficaDataUpdate = onDocumentUpdated(
-  { document: "anagrafica_data/{dataId}", region: "europe-west8" },
+  { document: "anagrafica_data/{dataId}", region: "europe-west1" },
   async (event) => {
     const beforeData = event.data?.before?.data();
     const afterData = event.data?.after?.data();
@@ -381,7 +381,7 @@ exports.onAnagraficaDataUpdate = onDocumentUpdated(
 // ============================================================================
 
 exports.onAccessCreate = onDocumentCreated(
-  { document: "accessi/{accessId}", region: "europe-west8" },
+  { document: "accessi/{accessId}", region: "europe-west1" },
   async (event) => {
     const data = event.data?.data();
     if (!data) return;
@@ -400,7 +400,7 @@ exports.onAccessCreate = onDocumentCreated(
 );
 
 exports.onAccessUpdate = onDocumentUpdated(
-  { document: "accessi/{accessId}", region: "europe-west8" },
+  { document: "accessi/{accessId}", region: "europe-west1" },
   async (event) => {
     const beforeData = event.data?.before?.data();
     const afterData = event.data?.after?.data();
@@ -421,7 +421,7 @@ exports.onAccessUpdate = onDocumentUpdated(
 // ============================================================================
 
 exports.onReminderWrite = onDocumentWritten(
-  { document: "reminders/{reminderId}", region: "europe-west8" },
+  { document: "reminders/{reminderId}", region: "europe-west1" },
   async (event) => {
     const beforeData = event.data?.before?.data();
     const afterData = event.data?.after?.data();
@@ -472,7 +472,7 @@ exports.onReminderWrite = onDocumentWritten(
 // ============================================================================
 
 exports.recalculateStats = onRequest(
-  { region: "europe-west8", cors: true, timeoutSeconds: 540, memory: "1GiB" },
+  { region: "europe-west1", cors: true, timeoutSeconds: 540, memory: "1GiB" },
   async (req, res) => {
     const structureId = req.query.structureId;
     if (!structureId) {
