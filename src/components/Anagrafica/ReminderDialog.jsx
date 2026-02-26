@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { createReminderAction } from "@/actions/anagrafica/reminders";
 import { AccessTypes } from "@/components/Anagrafica/AccessDialog/AccessTypes";
+import PostAccessDialog from "@/components/Anagrafica/AccessDialog/PostAccessDialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,6 +20,8 @@ import {
 export default function ReminderDialog({ anagraficaId, structureId }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showPostDialog, setShowPostDialog] = useState(false);
+  const [lastPayload, setLastPayload] = useState(null);
 
   const [form, setForm] = useState({
     serviceType: AccessTypes[0]?.label || "",
@@ -62,9 +65,14 @@ export default function ReminderDialog({ anagraficaId, structureId }) {
         note: form.note || null,
       });
 
-      toast.success("Promemoria salvato");
+      setLastPayload([{
+        tipoAccesso: form.serviceType,
+        reminderDate: dateTime,
+        note: form.note || null,
+      }]);
       setOpen(false);
       handleReset();
+      setShowPostDialog(true);
     } catch (err) {
       console.error(err);
       toast.error("Errore durante il salvataggio del promemoria");
@@ -74,6 +82,14 @@ export default function ReminderDialog({ anagraficaId, structureId }) {
   };
 
   return (
+    <>
+    <PostAccessDialog
+      open={showPostDialog}
+      onDone={() => {
+        setShowPostDialog(false);
+      }}
+      payload={lastPayload}
+    />
     <Dialog
       open={open}
       onOpenChange={(v) => {
@@ -159,5 +175,6 @@ export default function ReminderDialog({ anagraficaId, structureId }) {
         </form>
       </DialogContent>
     </Dialog>
+    </>
   );
 }
