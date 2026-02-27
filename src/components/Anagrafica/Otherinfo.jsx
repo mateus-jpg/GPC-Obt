@@ -190,5 +190,6 @@ function DataRow({ label, value, small = false }) {
 const formatTimestamp = (ts, includeTime = false) => {
   if (!ts?._seconds) return '';
   const date = new Date(ts._seconds * 1000);
-  return includeTime ? date.toLocaleString('it-IT') : date.toLocaleDateString('it-IT');
+  const tz = { timeZone: 'Europe/Rome' };
+  return includeTime ? date.toLocaleString('it-IT', tz) : date.toLocaleDateString('it-IT', tz);
 };

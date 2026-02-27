@@ -89,5 +89,5 @@ function formatDate(ts) {
     if (!ts) return '-';
     // Handle Firestore Timestamp or Date string
     const date = ts._seconds ? new Date(ts._seconds * 1000) : new Date(ts);
-    return date.toLocaleDateString('it-IT');
+    return date.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' });
 }

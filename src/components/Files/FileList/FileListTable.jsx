@@ -32,7 +32,7 @@ function formatDate(dateString) {
 /**
  * File actions dropdown menu
  */
-function FileActionsMenu({ file, onDelete, onRename }) {
+function FileActionsMenu({ file, onDelete, onRename, onMove }) {
   const [isDownloading, setIsDownloading] = useState(false);
 
   const handleDownload = async () => {
@@ -70,6 +70,10 @@ function FileActionsMenu({ file, onDelete, onRename }) {
         <DropdownMenuItem onClick={() => onRename?.(file)}>
           <Edit className="mr-2 h-4 w-4" />
           Rename
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onMove?.(file)}>
+          <Folder className="mr-2 h-4 w-4" />
+          Move
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
@@ -308,6 +312,7 @@ export default function FileListTable({
               file={row.original}
               onDelete={onFileDelete}
               onRename={onFileRename}
+              onMove={onFileMove}
             />
           );
         },
