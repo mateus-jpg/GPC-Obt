@@ -20,6 +20,7 @@ import FileListTable from '@/components/Files/FileList/FileListTable';
 import FolderBreadcrumbs from '@/components/Files/Breadcrumbs/FolderBreadcrumbs';
 import CreateFolderDialog from '@/components/Files/Dialogs/CreateFolderDialog';
 import UploadFilesDialog from '@/components/Files/Dialogs/UploadFilesDialog';
+import MoveItemDialog from '@/components/Files/Dialogs/MoveItemDialog';
 import {
   useFolderTree,
   useFolderContents,
@@ -41,6 +42,8 @@ export default function FilesPage() {
   const [currentFolderId, setCurrentFolderId] = useState(null);
   const [createFolderDialogOpen, setCreateFolderDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [movingItem, setMovingItem] = useState(null);
 
   // Fetch folder tree
   const {
@@ -84,6 +87,27 @@ export default function FilesPage() {
       setCreateFolderDialogOpen(false);
     }
   };
+
+  // Open the move dialog for a file or folder
+  const handleMoveClick = useCallback((item) => {
+    setMovingItem(item);
+    setMoveDialogOpen(true);
+  }, []);
+
+  // Execute move after destination is selected in the dialog
+  const handleMoveConfirm = useCallback(
+    async (targetFolderId) => {
+      if (!movingItem) return;
+      if (movingItem.isFolder) {
+        await folderOps.move(movingItem.id, targetFolderId);
+      } else {
+        await fileOps.moveFile(movingItem.id, targetFolderId);
+      }
+      setMoveDialogOpen(false);
+      setMovingItem(null);
+    },
+    [movingItem, folderOps, fileOps]
+  );
 
   // Handle refresh
   const handleRefresh = () => {
@@ -213,8 +237,12 @@ export default function FilesPage() {
                     subfolders={subfolders}
                     currentFolder={currentFolder}
                     onFolderOpen={handleFolderSelect}
-                    onFileMove={(fileId, targetFolderId) => {
-                      fileOps.moveFile(fileId, targetFolderId);
+                    onFileMove={(fileIdOrObj, targetFolderId) => {
+                      if (targetFolderId !== undefined) {
+                        fileOps.moveFile(fileIdOrObj, targetFolderId);
+                      } else {
+                        handleMoveClick({ ...fileIdOrObj, isFolder: false });
+                      }
                     }}
                     onFileDelete={(file) => {
                       if (
@@ -225,8 +253,12 @@ export default function FilesPage() {
                         fileOps.removeFile(file.id);
                       }
                     }}
-                    onFolderMove={(folderId, targetFolderId) => {
-                      folderOps.move(folderId, targetFolderId);
+                    onFolderMove={(folderIdOrObj, targetFolderId) => {
+                      if (targetFolderId !== undefined) {
+                        folderOps.move(folderIdOrObj, targetFolderId);
+                      } else {
+                        handleMoveClick({ ...folderIdOrObj, isFolder: true });
+                      }
                     }}
                     onFolderDelete={(folder) => {
                       const hasContents =
@@ -258,8 +290,12 @@ export default function FilesPage() {
                     files={files}
                     subfolders={subfolders}
                     onFolderOpen={handleFolderSelect}
-                    onFileMove={(fileId, targetFolderId) => {
-                      fileOps.moveFile(fileId, targetFolderId);
+                    onFileMove={(fileIdOrObj, targetFolderId) => {
+                      if (targetFolderId !== undefined) {
+                        fileOps.moveFile(fileIdOrObj, targetFolderId);
+                      } else {
+                        handleMoveClick({ ...fileIdOrObj, isFolder: false });
+                      }
                     }}
                     onFileDelete={(file) => {
                       if (
@@ -280,6 +316,9 @@ export default function FilesPage() {
                       if (confirm(message)) {
                         folderOps.remove(folder.id, hasContents);
                       }
+                    }}
+                    onFolderMove={(folder) => {
+                      handleMoveClick({ ...folder, isFolder: true });
                     }}
                     onFolderRename={(folder) => {
                       const newName = prompt(
@@ -307,6 +346,16 @@ export default function FilesPage() {
             onSubmit={handleCreateFolder}
             parentFolderName={currentFolderName}
             isCreating={folderOps.isCreating}
+          />
+
+          {/* Move Dialog */}
+          <MoveItemDialog
+            open={moveDialogOpen}
+            onOpenChange={setMoveDialogOpen}
+            item={movingItem}
+            folders={folders}
+            onConfirm={handleMoveConfirm}
+            isMoving={fileOps.isMoving || folderOps.isMoving}
           />
         </CardContent>
       </Card>

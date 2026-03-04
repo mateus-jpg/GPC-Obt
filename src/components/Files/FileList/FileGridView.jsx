@@ -240,7 +240,7 @@ function FolderGridItem({ folder, onOpen, onRename, onMove, onDelete, isSelected
 /**
  * Grid item for a file (draggable)
  */
-function FileGridItem({ file, onDelete, onRename, isSelected, isDragOverlay = false }) {
+function FileGridItem({ file, onDelete, onRename, onMove, isSelected, isDragOverlay = false }) {
   const [isDownloading, setIsDownloading] = useState(false);
 
   // Make file draggable
@@ -334,6 +334,15 @@ function FileGridItem({ file, onDelete, onRename, isSelected, isDragOverlay = fa
                 >
                   <Edit className="mr-2 h-4 w-4" />
                   Rename
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onMove?.(file);
+                  }}
+                >
+                  <Folder className="mr-2 h-4 w-4" />
+                  Move
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
@@ -502,6 +511,7 @@ export default function FileGridView({
             file={file}
             onDelete={onFileDelete}
             onRename={onFileRename}
+            onMove={onFileMove}
             isSelected={selectedItems.includes(file.id)}
           />
         ))}
